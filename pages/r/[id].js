@@ -41,14 +41,19 @@ export default function SurveyPage({ client, error }) {
     <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6', padding: '1rem', fontFamily: 'sans-serif', color: '#111827' }}>
       <div style={{ width: '100%', maxWidth: '28rem', borderRadius: '1rem', backgroundColor: '#fff', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', textAlign: 'center' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937' }}>How was your experience at {client.business_name}?</h2>
+        
         {!submitted && rating === 0 && (
           <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button key={star} onClick={() => handleRating(star)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
-            ))}
+            <button onClick={() => handleRating(1)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
+            <button onClick={() => handleRating(2)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
+            <button onClick={() => handleRating(3)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
+            <button onClick={() => handleRating(4)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
+            <button onClick={() => handleRating(5)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
           </div>
         )}
+
         {submitted && rating >= 4 && <p style={{ marginTop: '1rem', color: '#16a34a', fontWeight: '500' }}>Thank you! Your feedback has been opened on Google.</p>}
+        
         {!submitted && rating > 0 && rating <= 3 && (
           <form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} style={{ marginTop: '1rem', textAlign: 'left' }}>
             <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>We are so sorry! How can we improve?</label>
@@ -56,6 +61,7 @@ export default function SurveyPage({ client, error }) {
             <button type="submit" style={{ marginTop: '0.75rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#2563eb', padding: '0.5rem', color: '#fff', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Submit Private Feedback</button>
           </form>
         )}
+        
         {submitted && rating <= 3 && <p style={{ marginTop: '1rem', color: '#2563eb', fontWeight: '500' }}>Thank you. Your feedback has been sent directly to management to rectify immediately.</p>}
       </div>
     </div>
