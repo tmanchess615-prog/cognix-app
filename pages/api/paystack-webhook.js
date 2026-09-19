@@ -6,19 +6,31 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ message: 'Method Not Allowed' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method Not Allowed' });
+  }
   
   const event = req.body;
 
+  // Find the business using the unique customer code sent by Paystack
   if (event.event === 'subscription.disable' || event.event === 'invoice.payment_failed') {
     const customerCode = event.data.customer.customer_code;
-    await supabase.from('clients').update({ subscription_status: 'suspended' }).eq('paystack_customer_code', customerCode);
+    
+    await supabase
+      .from('clients')
+      .update({ subscription_status: 'suspended' })
+      .eq('paystack_customer_code', customerCode);
+      
     return res.status(200).json({ status: 'success', message: 'Client suspended.' });
   }
 
   if (event.event === 'subscription.create' || event.event === 'invoice.create') {
     const customerCode = event.data.customer.customer_code;
-    await supabase.from('clients').update({ subscription_status: 'active' }).eq('paystack_customer_code', customerCode);
+    
+    await supabase
+      .from('clients')
+      .update({ subscription_status: 'active' })
+      .eq('paystack_customer_code', customerCode);
   }
 
   return res.status(200).json({ status: 'ignored' });
