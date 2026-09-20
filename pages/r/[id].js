@@ -29,7 +29,6 @@ export default function SurveyPage({ client, routeId }) {
   const handleRating = (stars) => {
     setRating(stars);
     if (stars >= 4) {
-      // 🚀 AUTOMATION ROUTE: Instantly redirect 4 & 5-star reviews to their Google link
       window.location.href = client.googleUrl;
     }
   };
@@ -44,7 +43,6 @@ export default function SurveyPage({ client, routeId }) {
         </h2>
         <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: '0 0 2rem 0' }}>Tap a star below to rate your visit today.</p>
         
-        {/* Star Selection Row */}
         {!submitted && rating === 0 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
             {[1, 2, 3, 4, 5].map((stars) => (
@@ -55,7 +53,6 @@ export default function SurveyPage({ client, routeId }) {
           </div>
         )}
 
-        {/* 🛑 INTERCEPTION ROUTE: 1-3 Stars captures private feedback to protect their brand */}
         {!submitted && rating > 0 && rating <= 3 && (
           <form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} style={{ marginTop: '1rem', textAlign: 'left' }}>
             <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#fca5a5' }}>
@@ -68,7 +65,6 @@ export default function SurveyPage({ client, routeId }) {
           </form>
         )}
         
-        {/* Success confirmation for intercepted review */}
         {submitted && rating <= 3 && (
           <div style={{ marginTop: '1rem' }}>
             <p style={{ color: '#38bdf8', fontWeight: '700', fontSize: '1.1rem', margin: '0' }}>Thank you for your honesty.</p>
