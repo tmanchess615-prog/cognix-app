@@ -1,30 +1,27 @@
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { CLIENTS_REGISTRY } from '../../lib/supabaseClient';
 
 export async function getServerSideProps(context) {
   const { id } = context.query;
-  const { data: client, error } = await supabase.from('clients').select('*').eq('id', id).single();
-  if (error || !client) return { props: { error: 'Invalid Code' } };
-  return { props: { client } };
+  const clientData = CLIENTS_REGISTRY[id] || null;
+  
+  return {
+    props: {
+      client: clientData,
+      routeId: id || ''
+    }
+  };
 }
 
-export default function SurveyPage({ client, error }) {
+export default function SurveyPage({ client, routeId }) {
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  if (error) return <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#ef4444', fontWeight: '700' }}>Invalid QR Code</div>;
-  
-  if (client.subscription_status === 'suspended') {
+  if (!client) {
     return (
-      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', padding: '0 1rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>Service Temporarily Unavailable</h1>
-        <p style={{ marginTop: '0.5rem', color: '#4b5563' }}>Please contact the establishment administrator regarding platform access.</p>
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0f172a', color: '#fca5a5', fontWeight: '700', fontFamily: 'sans-serif' }}>
+        ⚠️ Invalid Setup Route. Profile Not Found.
       </div>
     );
   }
@@ -32,37 +29,53 @@ export default function SurveyPage({ client, error }) {
   const handleRating = (stars) => {
     setRating(stars);
     if (stars >= 4) {
-      window.open(client.google_review_url, '_blank');
-      setSubmitted(true);
+      // 🚀 AUTOMATION ROUTE: Instantly redirect 4 & 5-star reviews to their Google link
+      window.location.href = client.googleUrl;
     }
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6', padding: '1rem', fontFamily: 'sans-serif', color: '#111827' }}>
-      <div style={{ width: '100%', maxWidth: '28rem', borderRadius: '1rem', backgroundColor: '#fff', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1f2937' }}>How was your experience at {client.business_name}?</h2>
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', padding: '1rem', fontFamily: 'sans-serif', color: '#f8fafc' }}>
+      <div style={{ width: '100%', maxWidth: '26rem', borderRadius: '1rem', backgroundColor: '#1e293b', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', textAlign: 'center', border: '1px solid #334155' }}>
         
+        <span style={{ fontSize: '2.5rem' }}>✨</span>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#ffffff', margin: '1rem 0 0.5rem 0', lineHeight: '1.3' }}>
+          How was your experience at <br /><span style={{ color: '#3b82f6' }}>{client.businessName}</span>?
+        </h2>
+        <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: '0 0 2rem 0' }}>Tap a star below to rate your visit today.</p>
+        
+        {/* Star Selection Row */}
         {!submitted && rating === 0 && (
-          <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-            <button onClick={() => handleRating(1)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
-            <button onClick={() => handleRating(2)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
-            <button onClick={() => handleRating(3)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
-            <button onClick={() => handleRating(4)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
-            <button onClick={() => handleRating(5)} style={{ fontSize: '2.25rem', background: 'none', border: 'none', cursor: 'pointer' }}>⭐</button>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            {[1, 2, 3, 4, 5].map((stars) => (
+              <button key={stars} onClick={() => handleRating(stars)} style={{ fontSize: '2.75rem', background: 'none', border: 'none', cursor: 'pointer' }}>
+                ⭐
+              </button>
+            ))}
           </div>
         )}
 
-        {submitted && rating >= 4 && <p style={{ marginTop: '1rem', color: '#16a34a', fontWeight: '500' }}>Thank you! Your feedback has been opened on Google.</p>}
-        
+        {/* 🛑 INTERCEPTION ROUTE: 1-3 Stars captures private feedback to protect their brand */}
         {!submitted && rating > 0 && rating <= 3 && (
           <form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} style={{ marginTop: '1rem', textAlign: 'left' }}>
-            <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>We are so sorry! How can we improve?</label>
-            <textarea required style={{ marginTop: '0.5rem', width: '100%', borderRadius: '0.5rem', borderColor: '#d1d5db', padding: '0.5rem', fontSize: '0.875rem' }} rows="4" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Your complaints are sent privately to management..." />
-            <button type="submit" style={{ marginTop: '0.75rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#2563eb', padding: '0.5rem', color: '#fff', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Submit Private Feedback</button>
+            <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#fca5a5' }}>
+              We are so sorry to hear that. How can we improve?
+            </label>
+            <textarea required rows="4" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Your complaints are sent privately to store management to resolve immediately..." style={{ marginTop: '0.5rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#0f172a', border: '1px solid #475569', padding: '0.75rem', fontSize: '0.9rem', color: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: 'sans-serif' }} />
+            <button type="submit" style={{ marginTop: '1rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#2563eb', padding: '0.8rem', color: '#fff', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
+              Submit Private Feedback
+            </button>
           </form>
         )}
         
-        {submitted && rating <= 3 && <p style={{ marginTop: '1rem', color: '#2563eb', fontWeight: '500' }}>Thank you. Your feedback has been sent directly to management to rectify immediately.</p>}
+        {/* Success confirmation for intercepted review */}
+        {submitted && rating <= 3 && (
+          <div style={{ marginTop: '1rem' }}>
+            <p style={{ color: '#38bdf8', fontWeight: '700', fontSize: '1.1rem', margin: '0' }}>Thank you for your honesty.</p>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '0.5rem' }}>Your feedback has been delivered securely to management to rectify your experience.</p>
+          </div>
+        )}
+
       </div>
     </div>
   );
