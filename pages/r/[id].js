@@ -1,5 +1,20 @@
 import { useState } from 'react';
-import { CLIENTS_REGISTRY } from '../../lib/supabaseClient';
+
+// 📋 SELF-CONTAINED CUSTOMER REGISTRY
+// To add new clients later, simply add them directly inside this block right here!
+const CLIENTS_REGISTRY = {
+  // 🧪 TEST ROUTE: https://cognix.co.za
+  "test": {
+    businessName: "Cognix Test Lounge",
+    googleUrl: "https://google.com"
+  },
+  
+  // 📥 ACTIVE HARDWARE CLIENT 1
+  "stand1": {
+    businessName: "The Cape Town Coffee Club",
+    googleUrl: "https://google.com"
+  }
+};
 
 export async function getServerSideProps(context) {
   const { id } = context.query;
@@ -21,7 +36,7 @@ export default function SurveyPage({ client, routeId }) {
   if (!client) {
     return (
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0f172a', color: '#fca5a5', fontWeight: '700', fontFamily: 'sans-serif' }}>
-        ⚠️ Invalid Setup Route. Profile Not Found.
+        ⚠️ Invalid QR Code / Route Not Setup.
       </div>
     );
   }
@@ -29,7 +44,7 @@ export default function SurveyPage({ client, routeId }) {
   const handleRating = (stars) => {
     setRating(stars);
     if (stars >= 4) {
-      // 🚀 AUTOMATION ROUTE: Instantly redirect 4 & 5-star reviews to their Google link
+      // 🚀 AUTOMATION ROUTE: Instantly redirect 4 & 5-star reviews to Google
       window.location.href = client.googleUrl;
     }
   };
@@ -61,7 +76,7 @@ export default function SurveyPage({ client, routeId }) {
             <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#fca5a5' }}>
               We are so sorry to hear that. How can we improve?
             </label>
-            <textarea required rows="4" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Your complaints are sent privately to store management to resolve immediately..." style={{ marginTop: '0.5rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#0f172a', border: '1px solid #475569', padding: '0.75rem', fontSize: '0.9rem', color: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: 'sans-serif' }} />
+            <textarea required rows="4" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Your message is sent privately to store management to resolve immediately..." style={{ marginTop: '0.5rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#0f172a', border: '1px solid #475569', padding: '0.75rem', fontSize: '0.9rem', color: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: 'sans-serif' }} />
             <button type="submit" style={{ marginTop: '1rem', width: '100%', borderRadius: '0.5rem', backgroundColor: '#2563eb', padding: '0.8rem', color: '#fff', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
               Submit Private Feedback
             </button>
@@ -80,3 +95,4 @@ export default function SurveyPage({ client, routeId }) {
     </div>
   );
 }
+
