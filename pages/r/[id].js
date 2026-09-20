@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CLIENTS_REGISTRY } from '../../lib/supabaseClient';
+import { CLIENTS_REGISTRY } from '../lib/supabaseClient';
 
 export async function getServerSideProps(context) {
   const { id } = context.query;
