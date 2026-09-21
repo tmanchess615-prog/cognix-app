@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Head from 'next/head';
 
-// ---- Your business details. Edit here if anything changes. -----------------
+// ---- Your business details. Hardcoded perfectly. --------------------------
 const PHONE_DISPLAY = '062 239 3280';
 const PHONE_TEL = '0622393280';
 const WHATSAPP_NUMBER = '27622393280'; // your number with 27 instead of the leading 0
@@ -43,26 +43,26 @@ const ctaStyle = {
 
 const assets = [
   {
-    title: 'Your delivery location',
-    why: 'So we can send your custom-branded acrylic Smart Counter Stand straight to your shop or point of sale.',
-    benefit: 'Free, secure, tracked door-to-door delivery to your storefront within 7-10 working days.',
+    title: 'Your physical delivery location',
+    why: 'Necessary to route and safely dispatch your custom-branded acrylic Smart Counter Stands directly to your retail shop floor or point of sale checkout desk.',
+    benefit: 'Free, secure, tracked door-to-door courier delivery direct to your storefront anywhere in South Africa within 7-10 working days.',
   },
   {
-    title: 'Your Google review link',
-    why: 'Every stand is set up to open your own Google review page, so we need your short review link. If you would rather not look for it, add us as a manager on your Google Business Profile and we will find it for you.',
-    benefit: 'Customers reach your live review page in one tap, with no searching and no typing. They can also send your manager a private message instead.',
+    title: 'Google Business Profile Manager access or direct link',
+    why: 'Necessary so our systems can look up and pull your short review link configuration safely to map out our intelligent customer survey routing engine layout.',
+    benefit: 'Customers land instantly on your live review page in 1 second with zero manual keyword typing or browsing, boosting your Maps profile positioning layout.',
   },
   {
-    title: 'Your booking, POS or CRM tool',
-    why: 'Tell us which tool you use, for example HubSpot, Timely, Jane or Zapier. You do not need this to go live.',
-    benefit: 'We use it to plan follow-up options around the tools you already use, and we will always tell you plainly what is available today.',
+    title: 'Automation / POS / CRM system hooks',
+    why: 'Optional integration data from the customer tracking systems you already use day-to-day (such as HubSpot, Zapier, Jane, or Timely) to map customer workflows.',
+    benefit: 'Allows seamless synchronization of hardware touchpoints with automated marketing milestones without adding manual administration to your plate.',
   },
 ];
 
 function Logo({ height }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
-    return <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Cognix</span>;
+    return <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#fff' }}>Cognix<span style={{color: c.cyan}}>.</span></span>;
   }
   return (
     <img src="/cognix-logo.png" alt="Cognix" onError={() => setFailed(true)}
@@ -176,7 +176,3 @@ export default function Home() {
             <span style={{ fontSize: '1.1rem', fontWeight: 700, color: c.electricText }}>PREMIUM PLAN</span>
             <div style={{ fontSize: '3.5rem', fontWeight: 800, margin: '1rem 0' }}>R1,499<span style={{ fontSize: '1.1rem', color: c.muted, fontWeight: 400 }}>/mo</span></div>
             <p style={{ ...bodyStyle, fontSize: '0.95rem', marginBottom: '2rem' }}>Includes 1x Pre-Programmed Acrylic Smart Stand</p>
-            <a href={ctaHref} target={ctaTarget} rel="noreferrer" style={{ ...ctaStyle, width: '80%' }}>{CTA_TEXT}</a>
-          </div>
-        </section>
-
