@@ -4,10 +4,10 @@ import Head from 'next/head';
 // ---- Your business details. Hardcoded perfectly. --------------------------
 const PHONE_DISPLAY = '062 239 3280';
 const PHONE_TEL = '0622393280';
-const WHATSAPP_NUMBER = '27622393280'; // your number with 27 instead of the leading 0
+const WHATSAPP_NUMBER = '27622393280'; 
 const EMAIL = 'lekalakalamashilo23@gmail.com';
 const DELIVERY = '7-10 working days anywhere in South Africa via tracked express courier';
-const PAYSTACK_LINK = ''; // paste your Paystack payment page link here when it is ready
+const PAYSTACK_LINK = ''; 
 // ---------------------------------------------------------------------------
 
 const c = {
@@ -59,14 +59,9 @@ const assets = [
   },
 ];
 
-function Logo({ height }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#fff' }}>Cognix<span style={{color: c.cyan}}>.</span></span>;
-  }
+function Logo() {
   return (
-    <img src="/cognix-logo.png" alt="Cognix" onError={() => setFailed(true)}
-      style={{ display: 'block', height: height, width: 'auto' }} />
+    <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#fff' }}>Cognix<span style={{color: c.cyan}}>.</span></span>
   );
 }
 
@@ -116,7 +111,7 @@ export default function Home() {
 
       <nav style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(15, 23, 42, 0.94)', borderBottom: '1px solid ' + c.line }}>
         <div style={{ ...wrap, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem 1.5rem', padding: '0.75rem 1.25rem' }}>
-          <a href="#top" style={{ color: c.text, textDecoration: 'none' }}><Logo height="2.6rem" /></a>
+          <a href="#top" style={{ color: c.text, textDecoration: 'none' }}><Logo /></a>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem 1.5rem' }}>
             <a href="#assets" style={navLink}>What we need</a>
             <a href="#pricing" style={navLink}>Pricing</a>
@@ -176,3 +171,9 @@ export default function Home() {
             <span style={{ fontSize: '1.1rem', fontWeight: 700, color: c.electricText }}>PREMIUM PLAN</span>
             <div style={{ fontSize: '3.5rem', fontWeight: 800, margin: '1rem 0' }}>R1,499<span style={{ fontSize: '1.1rem', color: c.muted, fontWeight: 400 }}>/mo</span></div>
             <p style={{ ...bodyStyle, fontSize: '0.95rem', marginBottom: '2rem' }}>Includes 1x Pre-Programmed Acrylic Smart Stand</p>
+            <a href={ctaHref} target={ctaTarget} rel="noreferrer" style={{ ...ctaStyle, width: '80%' }}>{CTA_TEXT}</a>
+          </div>
+        </section>
+
+        <footer id="contact" style={{ padding: '4rem 0', borderTop: '1px solid ' + c.line, textAlign: 'center' }}>
+          <h2 style={h2Style}>Have questions?</h2>
