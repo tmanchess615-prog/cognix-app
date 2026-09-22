@@ -15,7 +15,8 @@ export async function getServerSideProps(context) {
   let clientData = null;
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?slug=eq.${slug}&select=*`, {
+    // Queries the optimized Supabase v2 layout framework tables directly
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?slug=eq.${slug}&select=id,slug,business_name,google_review_url,manager_phone,logo_url`, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -25,7 +26,7 @@ export async function getServerSideProps(context) {
     if (res.ok) {
       const data = await res.json();
       if (data && data.length > 0) {
-        clientData = data[0];
+        clientData = data[0]; // Extract the first matched client object listing parameters
       }
     }
   } catch (err) {
@@ -54,8 +55,27 @@ export default function ReviewRouterPage({ client, slug }) {
     );
   }
 
-  const handleRating = (stars) => {
+  const handleRating = async (stars) => {
     setRating(stars);
+    
+    // Log the initial customer interaction touchpoint into your scans analytics table tracking logs
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/scans_log`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: client.id,
+          interaction_type: stars >= 4 ? 'google_redirect' : 'private_intercept'
+        })
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
     if (stars >= 4) {
       window.location.href = client.google_review_url;
     }
@@ -69,10 +89,11 @@ export default function ReviewRouterPage({ client, slug }) {
     const whatsappMsg = `⚠️ *Cognix Feedback Alert*\n\n*Business:* ${client.business_name}\n*Rating:* ${rating}/5 Stars ⭐\n\n*Customer Complaint:*\n"${feedback}"`;
     const waUrl = `https://wa.me{client.manager_phone}?text=${encodeURIComponent(whatsappMsg)}`;
 
-    // 📲 CRITICAL: Fire window popup instantly inside click event handler to bypass phone pop-up blocks
+    // Open WhatsApp synchronously inside click handler to bypass mobile popup blockers completely
     const waWindow = window.open(waUrl, '_blank');
 
     try {
+      // Write the bad review into private logs linked cleanly via corporate UUID parameters
       await fetch(`${SUPABASE_URL}/rest/v1/private_reviews`, {
         method: 'POST',
         headers: {
@@ -82,7 +103,7 @@ export default function ReviewRouterPage({ client, slug }) {
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
-          client_slug: slug,
+          client_id: client.id,
           stars: rating,
           feedback: feedback
         })
@@ -91,7 +112,6 @@ export default function ReviewRouterPage({ client, slug }) {
       setDone(true);
     } catch (err) {
       console.error(err);
-      // Fallback fallback if browser completely choked the pop-up channel
       if (!waWindow) window.location.href = waUrl;
     } finally {
       setSubmitting(false);
