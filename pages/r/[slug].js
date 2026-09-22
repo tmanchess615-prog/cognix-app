@@ -1,56 +1,155 @@
--- ============================================================
---  COGNIX ROUTER DATABASE
---  Run in Supabase: SQL Editor > New query > paste all > Run
---  Safe to run more than once.
--- ============================================================
+import { useState } from 'react';
+import Head from 'next/head';
 
-create table if not exists public.clients (
-  id uuid primary key default gen_random_uuid(),
-  slug text unique not null,             -- the part after /r/, e.g. 'mamas-bakery'
-  business_name text not null,
-  google_review_url text not null,
-  manager_phone text not null,           -- digits only: country code + number, e.g. 27821234567
-  logo_url text,                         -- optional; referenced in the brief but not in the
-                                          -- original table list, added here so nothing breaks
-  created_at timestamptz not null default now()
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-create table if not exists public.private_reviews (
-  id uuid primary key default gen_random_uuid(),
-  client_slug text not null references public.clients(slug) on delete cascade,
-  stars int not null check (stars between 1 and 5),
-  feedback text,
-  created_at timestamptz not null default now()
-);
+const c = {
+  bg: '#0f172a', surface: '#131f38', line: '#22335a', text: '#f1f5f9', muted: '#a5b3cb',
+  electric: '#1f6fff', electricText: '#4db2ff', cyan: '#22d3ee', critical: '#f87171', success: '#4ade80'
+};
+const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
-create index if not exists private_reviews_slug_idx
-  on public.private_reviews (client_slug, created_at desc);
+export async function getServerSideProps(context) {
+  const { slug } = context.query;
+  let clientData = null;
 
--- Row Level Security: the public anon key can do nothing except what is
--- explicitly allowed below. No login is used anywhere on this router page.
-alter table public.clients enable row level security;
-alter table public.private_reviews enable row level security;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?slug=eq.${slug}&select=*`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        clientData = data[0];
+      }
+    }
+  } catch (err) {
+    console.error('Handshake verification failed:', err);
+  }
 
--- Anyone may READ client routing data (business name, Google link, phone).
--- This is what lets the router page work with no login at all.
-drop policy if exists "public can read clients" on public.clients;
-create policy "public can read clients" on public.clients
-  for select to anon
-  using (true);
+  return {
+    props: {
+      client: clientData,
+      slug: slug || ''
+    }
+  };
+}
 
--- Anyone may SUBMIT a private review, but nobody using the public key can
--- ever read them back. You read them yourself in the Supabase Table Editor,
--- logged in as the project owner, which bypasses this policy entirely.
-drop policy if exists "public can insert private reviews" on public.private_reviews;
-create policy "public can insert private reviews" on public.private_reviews
-  for insert to anon
-  with check (true);
+export default function ReviewRouterPage({ client, slug }) {
+  const [rating, setRating] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
 
-grant select on public.clients to anon;
-grant insert on public.private_reviews to anon;
+  if (!client) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: c.bg, color: c.critical, fontWeight: '700', fontFamily: sans, padding: '1.5rem', textAlign: 'center' }}>
+        ⚠️ Invalid QR Code / Route Not Setup.
+      </div>
+    );
+  }
 
--- Add your first test client. Edit the values, then run just this line
--- again for each new client (or use Table Editor > clients > Insert row).
-insert into public.clients (slug, business_name, google_review_url, manager_phone)
-values ('demo', 'Cognix Demo Cafe', 'https://www.google.com/', '27821234567')
-on conflict (slug) do nothing;
+  const handleRating = (stars) => {
+    setRating(stars);
+    if (stars >= 4) {
+      window.location.href = client.google_review_url;
+    }
+  };
+
+  const handleSubmitFeedback = async (e) => {
+    e.preventDefault();
+    if (!feedback.trim()) return;
+    setSubmitting(true);
+
+    const whatsappMsg = `⚠️ *Cognix Feedback Alert*\n\n*Business:* ${client.business_name}\n*Rating:* ${rating}/5 Stars ⭐\n\n*Customer Complaint:*\n"${feedback}"`;
+    const waUrl = `https://wa.me{client.manager_phone}?text=${encodeURIComponent(whatsappMsg)}`;
+
+    // 📲 CRITICAL: Fire window popup instantly inside click event handler to bypass phone pop-up blocks
+    const waWindow = window.open(waUrl, '_blank');
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/private_reviews`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          client_slug: slug,
+          stars: rating,
+          feedback: feedback
+        })
+      });
+
+      setDone(true);
+    } catch (err) {
+      console.error(err);
+      // Fallback fallback if browser completely choked the pop-up channel
+      if (!waWindow) window.location.href = waUrl;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg, padding: '1.25rem', fontFamily: sans, color: c.text }}>
+      <Head>
+        <title>Review Shield Engine | Cognix</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+
+      <div style={{ width: '100%', maxWidth: '26rem', borderRadius: '1rem', backgroundColor: c.surface, padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)', textAlign: 'center', border: '1px solid ' + c.line }}>
+        {client.logo_url && <img src={client.logo_url} alt="" style={{ height: '3.5rem', width: 'auto', marginBottom: '1rem' }} />}
+        
+        <h2 style={{ fontSize: '1.55rem', fontWeight: '800', margin: '0.5rem 0', lineHeight: 1.3 }}>
+          How was your experience at <br />
+          <span style={{ color: c.electricText }}>{client.business_name}</span>?
+        </h2>
+        <p style={{ color: c.muted, fontSize: '0.95rem', margin: '0 0 2rem 0' }}>Tap a star below to rate your visit today.</p>
+
+        {!done && rating === 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem' }}>
+            {[1, 2, 3, 4, 5].map((stars) => (
+              <button key={stars} onClick={() => handleRating(stars)} style={{ fontSize: '2.6rem', background: 'none', border: 'none', cursor: 'pointer' }}>
+                ⭐
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!done && rating > 0 && rating <= 3 && (
+          <form onSubmit={handleSubmitFeedback} style={{ textAlign: 'left' }}>
+            <div style={{ background: 'rgba(248, 113, 113, 0.1)', padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid rgba(248, 113, 113, 0.2)', marginBottom: '1rem' }}>
+              <p style={{ color: c.critical, fontSize: '0.88rem', fontWeight: 600, margin: 0 }}>
+                🔒 Reputation Shield Active: Your experience stays off Google.
+              </p>
+            </div>
+            
+            <textarea required rows="4" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Tell management how we can fix this immediately..." style={{ width: '100%', borderRadius: '0.5rem', backgroundColor: c.bg, border: '1px solid ' + c.line, padding: '0.85rem', fontSize: '0.92rem', color: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: sans, resize: 'none' }} />
+            
+            <button type="submit" disabled={submitting} style={{ marginTop: '1rem', width: '100%', borderRadius: '0.5rem', backgroundColor: c.electric, padding: '1rem', color: '#fff', fontWeight: '800', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
+              {submitting ? 'Connecting...' : '🚀 Send to the Manager'}
+            </button>
+          </form>
+        )}
+
+        {done && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>✅</div>
+            <p style={{ color: c.success, fontWeight: '800', fontSize: '1.15rem', margin: '0' }}>Feedback Routed.</p>
+            <p style={{ color: c.muted, fontSize: '0.92rem', marginTop: '0.5rem', lineHeight: 1.5 }}>
+              Your response has been securely filed in our database and a direct emergency alert has been sent to management via WhatsApp.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
