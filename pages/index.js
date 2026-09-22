@@ -7,7 +7,7 @@ const PHONE_TEL = '0622393280';
 const WHATSAPP_NUMBER = '27622393280'; // your number with 27 instead of the leading 0
 const EMAIL = 'lekalakalamashilo23@gmail.com';
 const DELIVERY = '7-10 working days anywhere in South Africa via tracked express courier';
-const PAYSTACK_LINK = ''; // optional: paste a Paystack link to add a "Subscribe online" button
+const PAYSTACK_LINK = 'https://paystack.shop/pay/bc2bpk6ows';
 // -----------------------------------------------------------------------------
 
 const c = {
@@ -20,7 +20,11 @@ const whatsappHref = 'https://wa.me/' + WHATSAPP_NUMBER;
 const contactHref = whatsappHref + '?text=' + encodeURIComponent(
   'Hi Cognix, I would like to know more about the Smart Counter Stand (R1,499/mo).'
 );
-const CTA_TEXT = 'Contact us';
+const SUBSCRIBE_TEXT = 'Subscribe now';
+const SUBSCRIBE_NOTE = "You'll be taken to our secure Paystack checkout to start your "
+  + "R1,499/month subscription. Once you're set up, your Smart Counter Stand ships to you.";
+const subscribeHref = PAYSTACK_LINK || contactHref;
+const subscribeTarget = PAYSTACK_LINK ? '_blank' : undefined;
 
 const DESCRIPTION = 'The Cognix Smart Counter Stand makes it easy for customers to leave a Google '
   + 'review, and lets unhappy customers message your manager privately. R1,499 per month.';
@@ -60,8 +64,9 @@ const assets = [
     why: 'Every stand is set up to open your own Google review page, so we need your short '
       + 'review link. If you would rather not look for it, add us as a manager on your Google '
       + 'Business Profile and we will find it for you.',
-    benefit: 'Customers reach your live review page in one tap, with no searching and no typing. '
-      + 'They can also send your manager a private message instead.',
+    benefit: 'Happy customers (4 or 5 stars) reach your live review page in one tap, with no '
+      + 'searching and no typing. Anyone who rates 3 stars or below goes to a private form for '
+      + 'your manager.',
   },
   {
     title: 'Your booking, POS or CRM tool',
@@ -97,8 +102,9 @@ const faqs = [
     'We cannot promise rankings, and nobody outside Google can. More recent, genuine reviews '
     + 'help customers trust you, and that is what the stand is built to get.'],
   ['What happens to unhappy customers?',
-    'They can post on Google or message your manager privately. Both options are shown to '
-    + 'everyone.'],
+    'Customers who rate 3 stars or below are taken to a private feedback form for your manager. '
+    + 'Customers who rate 4 or 5 stars are taken to leave a public Google review. Each screen '
+    + 'also has a small link to the other option.'],
   ['How long does delivery take?',
     '7-10 working days anywhere in South Africa, by tracked express courier, at no charge.'],
   ['How do I cancel?',
@@ -213,13 +219,15 @@ function HeroScene() {
         <text x="53" y="70" textAnchor="middle" fontSize="15" fill={c.star} letterSpacing="1">
           {star + star + star + star + star}
         </text>
-        <rect x="16" y="90" width="74" height="24" rx="6" fill="#1f6fff" />
-        <text x="53" y="105" textAnchor="middle" fontSize="7" fontWeight="700" fill="#ffffff">
-          Leave a Google review
+        <text x="53" y="92" textAnchor="middle" fontSize="9" fontWeight="700" fill="#ffffff">
+          Thank you!
         </text>
-        <rect x="16" y="122" width="74" height="24" rx="6" fill="#22335a" />
-        <text x="53" y="137" textAnchor="middle" fontSize="7" fontWeight="700" fill="#ffffff">
-          Message the manager
+        <rect x="16" y="102" width="74" height="26" rx="6" fill="#1f6fff" />
+        <text x="53" y="118" textAnchor="middle" fontSize="7" fontWeight="700" fill="#ffffff">
+          Leave a public review
+        </text>
+        <text x="53" y="146" textAnchor="middle" fontSize="6" fill={c.muted}>
+          5 stars: public Google review
         </text>
       </g>
     </svg>
@@ -238,117 +246,148 @@ function NfcIcon() {
   );
 }
 
-function PhoneFrame({ children }) {
+function PhoneFrame({ children, active }) {
   return (
-    <div style={{ width: '13.5rem', height: '25rem', borderRadius: '2rem', border: '7px solid #2a3b63',
-                  background: '#0b1224', padding: '0.7rem 0.8rem', boxSizing: 'border-box',
-                  display: 'flex', flexDirection: 'column',
-                  boxShadow: '0 24px 48px rgba(0, 0, 0, 0.45)' }}>
-      <div style={{ width: '3.5rem', height: '0.3rem', background: '#2a3b63', borderRadius: '9999px',
-                    margin: '0 auto 0.8rem auto' }} />
+    <div style={{ width: '11.5rem', height: '22rem', borderRadius: '1.8rem', boxSizing: 'border-box',
+                  border: '6px solid ' + (active ? c.electric : '#2a3b63'), background: '#0b1224',
+                  padding: '0.6rem 0.65rem', display: 'flex', flexDirection: 'column',
+                  boxShadow: active
+                    ? '0 0 0 3px rgba(31, 111, 255, 0.3), 0 24px 48px rgba(0, 0, 0, 0.45)'
+                    : '0 24px 48px rgba(0, 0, 0, 0.45)' }}>
+      <div style={{ width: '3rem', height: '0.28rem', background: '#2a3b63', borderRadius: '9999px',
+                    margin: '0 auto 0.7rem auto' }} />
       {children}
     </div>
   );
 }
 
-function Step({ n, title, text, children }) {
+function Step({ n, title, text, dim, children }) {
   return (
-    <div style={{ width: '13.5rem' }}>
+    <div style={{ width: '11.5rem', opacity: dim ? 0.35 : 1, transition: 'opacity 0.2s' }}>
       {children}
-      <div style={{ marginTop: '1.1rem', display: 'flex', gap: '0.6rem', alignItems: 'baseline' }}>
-        <span style={{ color: c.electricText, fontWeight: 800, fontSize: '1.2rem' }}>{n}</span>
-        <span style={{ fontWeight: 800, fontSize: '1.05rem' }}>{title}</span>
+      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'baseline' }}>
+        <span style={{ color: c.electricText, fontWeight: 800, fontSize: '1.1rem' }}>{n}</span>
+        <span style={{ fontWeight: 800, fontSize: '1rem' }}>{title}</span>
       </div>
-      <p style={{ ...bodyStyle, fontSize: '0.95rem', marginTop: '0.35rem' }}>{text}</p>
+      <p style={{ ...bodyStyle, fontSize: '0.9rem', marginTop: '0.35rem' }}>{text}</p>
     </div>
   );
 }
 
-const screen = { flex: 1, display: 'flex', flexDirection: 'column', fontSize: '0.9rem' };
+const screen = { flex: 1, display: 'flex', flexDirection: 'column', fontSize: '0.85rem' };
 const miniButton = {
-  borderRadius: '0.5rem', padding: '0.65rem 0.5rem', textAlign: 'center', fontWeight: 700,
-  fontSize: '0.85rem', color: '#fff',
+  borderRadius: '0.5rem', padding: '0.6rem 0.4rem', textAlign: 'center', fontWeight: 700,
+  fontSize: '0.8rem', color: '#fff', lineHeight: 1.25,
+};
+const smallLink = { color: c.muted, fontSize: '0.68rem', textDecoration: 'underline', lineHeight: 1.35 };
+const chipStyle = {
+  border: '1px solid ' + c.line, background: c.surface, borderRadius: '9999px',
+  padding: '0.6rem 1.1rem', fontSize: '0.95rem',
 };
 
 function Storyboard() {
   const [n, setN] = useState(0);
+  const isPublic = n >= 4;
+  const isPrivate = n >= 1 && n <= 3;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2.5rem 2rem', justifyContent: 'center' }}>
-      <Step n="1" title="Tap or scan"
-        text="Customers tap their phone on the stand or scan the code. No app to install.">
-        <PhoneFrame>
-          <div style={{ ...screen, alignItems: 'center', justifyContent: 'center', textAlign: 'center',
-                        gap: '0.9rem' }}>
-            <NfcIcon />
-            <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>Tap your phone on the stand</div>
-            <div style={{ color: c.muted, fontSize: '0.85rem' }}>or scan the QR code with your camera</div>
-          </div>
-        </PhoneFrame>
-      </Step>
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '2.5rem' }}>
+        <div style={chipStyle}><b>4 or 5 stars</b> &rarr; public Google review</div>
+        <div style={chipStyle}><b>3 stars or below</b> &rarr; private feedback</div>
+      </div>
 
-      <Step n="2" title="Rate the visit"
-        text="One tap on the stars, with your business name at the top. Try it here.">
-        <PhoneFrame>
-          <div style={{ ...screen, justifyContent: 'center', textAlign: 'center' }}>
-            <div style={{ color: c.electricText, fontWeight: 700, fontSize: '0.8rem' }}>Example Cafe</div>
-            <div style={{ fontWeight: 800, fontSize: '1.15rem', margin: '0.4rem 0 0.9rem 0' }}>
-              How was your visit?
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2.5rem 1.5rem', justifyContent: 'center' }}>
+        <Step n="1" title="Tap or scan"
+          text="Customers tap their phone on the stand or scan the code. No app to install.">
+          <PhoneFrame>
+            <div style={{ ...screen, alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+                          gap: '0.8rem' }}>
+              <NfcIcon />
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Tap your phone on the stand</div>
+              <div style={{ color: c.muted, fontSize: '0.78rem' }}>or scan the QR code with your camera</div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.05rem' }}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <button key={i} onClick={() => setN(i)} aria-label={i + ' out of 5 stars'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                           fontSize: '2rem', lineHeight: 1, color: i <= n ? c.star : '#34456b' }}>
-                  &#9733;
-                </button>
-              ))}
-            </div>
-            <div style={{ color: c.muted, fontSize: '0.8rem', marginTop: '0.7rem' }}>
-              Tap a star to rate it
-            </div>
-          </div>
-        </PhoneFrame>
-      </Step>
+          </PhoneFrame>
+        </Step>
 
-      <Step n="3" title="Choose what to do"
-        text="Post on Google, or write a private message. Everyone sees both options.">
-        <PhoneFrame>
-          <div style={{ ...screen, gap: '0.6rem' }}>
-            <div style={{ fontWeight: 800, fontSize: '1.05rem', textAlign: 'center' }}>Thank you!</div>
-            <div style={{ ...miniButton, background: c.electric }}>Leave a public Google review</div>
-            <div style={{ borderTop: '1px solid ' + c.line, paddingTop: '0.6rem', color: c.muted,
-                          fontSize: '0.75rem' }}>
-              Or tell the manager privately
-            </div>
-            <div style={{ border: '1px solid ' + c.line, borderRadius: '0.5rem', padding: '0.5rem',
-                          color: c.muted, fontSize: '0.78rem', lineHeight: 1.4, height: '3.6rem' }}>
-              The coffee was cold and we waited 20 minutes.
-            </div>
-            <div style={{ ...miniButton, background: '#22335a' }}>Send on WhatsApp</div>
-          </div>
-        </PhoneFrame>
-      </Step>
-
-      <Step n="4" title="You hear about it"
-        text="Private messages open in WhatsApp, ready to send to your manager.">
-        <PhoneFrame>
-          <div style={{ ...screen, borderRadius: '0.7rem', overflow: 'hidden', background: '#0d1b2a' }}>
-            <div style={{ background: '#123c3a', padding: '0.6rem 0.7rem', fontWeight: 700,
-                          fontSize: '0.85rem' }}>
-              Manager
-            </div>
-            <div style={{ padding: '0.8rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <div style={{ alignSelf: 'flex-start', maxWidth: '88%', background: '#1c2b3a',
-                            borderRadius: '0.6rem 0.6rem 0.6rem 0.1rem', padding: '0.55rem 0.65rem',
-                            fontSize: '0.8rem', lineHeight: 1.45 }}>
-                Feedback for Example Cafe: 3 out of 5 stars. The coffee was cold and we waited
-                20 minutes.
+        <Step n="2" title="Rate the visit"
+          text="One tap on the stars. Try it: tap 5 stars, then tap 3 stars.">
+          <PhoneFrame active={n > 0}>
+            <div style={{ ...screen, justifyContent: 'center', textAlign: 'center' }}>
+              <div style={{ color: c.electricText, fontWeight: 700, fontSize: '0.75rem' }}>Example Cafe</div>
+              <div style={{ fontWeight: 800, fontSize: '1.05rem', margin: '0.35rem 0 0.8rem 0' }}>
+                How was your visit?
               </div>
-              <div style={{ color: c.muted, fontSize: '0.7rem' }}>Example message</div>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <button key={i} onClick={() => setN(i)} aria-label={i + ' out of 5 stars'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                             fontSize: '1.8rem', lineHeight: 1, color: i <= n ? c.star : '#34456b' }}>
+                    &#9733;
+                  </button>
+                ))}
+              </div>
+              <div style={{ color: n === 0 ? c.muted : c.electricText, fontSize: '0.75rem',
+                            marginTop: '0.7rem', fontWeight: n === 0 ? 400 : 700 }}>
+                {n === 0 ? 'Tap a star to rate it'
+                  : isPublic ? n + ' stars: public Google review' : n + ' star' + (n === 1 ? '' : 's') + ': private feedback'}
+              </div>
             </div>
-          </div>
-        </PhoneFrame>
-      </Step>
+          </PhoneFrame>
+        </Step>
+
+        <Step n="3A" title="4 or 5 stars" dim={n > 0 && !isPublic}
+          text="Happy customers are taken to leave a public Google review.">
+          <PhoneFrame active={isPublic}>
+            <div style={{ ...screen, justifyContent: 'center', textAlign: 'center', gap: '0.6rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Thank you!</div>
+              <div style={{ color: c.muted, fontSize: '0.78rem' }}>We are glad you enjoyed it.</div>
+              <div style={{ ...miniButton, background: c.electric }}>Leave a public Google review</div>
+              <div style={smallLink}>Or message the manager privately</div>
+            </div>
+          </PhoneFrame>
+        </Step>
+
+        <Step n="3B" title="3 stars or below" dim={n > 0 && !isPrivate}
+          text="Other customers are taken to a private feedback form for your manager.">
+          <PhoneFrame active={isPrivate}>
+            <div style={{ ...screen, gap: '0.5rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', textAlign: 'center' }}>
+                Sorry to hear that
+              </div>
+              <div style={{ color: c.muted, fontSize: '0.72rem', textAlign: 'center' }}>
+                Tell the manager privately
+              </div>
+              <div style={{ border: '1px solid ' + c.line, borderRadius: '0.5rem', padding: '0.45rem',
+                            color: c.muted, fontSize: '0.74rem', lineHeight: 1.4, height: '3.4rem' }}>
+                The coffee was cold and we waited 20 minutes.
+              </div>
+              <div style={{ ...miniButton, background: '#22335a' }}>Send to the manager</div>
+              <div style={{ ...smallLink, textAlign: 'center' }}>Prefer to post on Google? Leave a public review</div>
+            </div>
+          </PhoneFrame>
+        </Step>
+
+        <Step n="4" title="You hear about it" dim={n > 0 && !isPrivate}
+          text="Private feedback opens in WhatsApp, ready to send to your manager.">
+          <PhoneFrame active={isPrivate}>
+            <div style={{ ...screen, borderRadius: '0.7rem', overflow: 'hidden', background: '#0d1b2a' }}>
+              <div style={{ background: '#123c3a', padding: '0.5rem 0.6rem', fontWeight: 700,
+                            fontSize: '0.8rem' }}>
+                Manager
+              </div>
+              <div style={{ padding: '0.7rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ alignSelf: 'flex-start', maxWidth: '90%', background: '#1c2b3a',
+                              borderRadius: '0.6rem 0.6rem 0.6rem 0.1rem', padding: '0.5rem 0.55rem',
+                              fontSize: '0.74rem', lineHeight: 1.45 }}>
+                  Feedback for Example Cafe: 3 out of 5 stars. The coffee was cold and we waited
+                  20 minutes.
+                </div>
+                <div style={{ color: c.muted, fontSize: '0.66rem' }}>Example message</div>
+              </div>
+            </div>
+          </PhoneFrame>
+        </Step>
+      </div>
     </div>
   );
 }
@@ -376,9 +415,10 @@ export default function Home() {
             <a href="#assets" style={navLink}>What we need</a>
             <a href="#pricing" style={navLink}>Pricing</a>
             <a href="#faq" style={navLink}>Questions</a>
-            <a href={contactHref} style={{ ...navLink, color: '#fff', background: c.electric,
-                                           padding: '0.55rem 1.1rem', borderRadius: '0.5rem' }}>
-              {CTA_TEXT}
+            <a href={subscribeHref} target={subscribeTarget} rel="noreferrer"
+              style={{ ...navLink, color: '#fff', background: c.electric,
+                      padding: '0.55rem 1.1rem', borderRadius: '0.5rem' }}>
+              Subscribe now
             </a>
           </div>
         </div>
@@ -400,11 +440,17 @@ export default function Home() {
               </p>
               <div style={{ marginTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem 1.5rem',
                             alignItems: 'center' }}>
-                <a href={contactHref} style={ctaStyle}>{CTA_TEXT}</a>
+                <a href={subscribeHref} target={subscribeTarget} rel="noreferrer" style={ctaStyle}>
+                  {SUBSCRIBE_TEXT}
+                </a>
                 <a href="#how" style={{ ...contactLink, fontSize: '1.02rem' }}>See how it works</a>
               </div>
-              <p style={{ ...bodyStyle, fontSize: '0.92rem', marginTop: '1.25rem', maxWidth: '32rem' }}>
-                R1,499 per month. No setup fee. Cancel any time. Delivered in {DELIVERY}.
+              <p style={{ ...bodyStyle, fontSize: '0.9rem', marginTop: '1.1rem', maxWidth: '28rem' }}>
+                {SUBSCRIBE_NOTE}
+              </p>
+              <p style={{ ...bodyStyle, fontSize: '0.92rem', marginTop: '0.6rem', maxWidth: '32rem' }}>
+                No setup fee. Cancel any time.{' '}
+                <a href={contactHref} style={contactLink}>Prefer to talk first? Contact us</a>
               </p>
             </div>
             <div style={{ flex: '1 1 20rem', display: 'flex', justifyContent: 'center' }}>
@@ -418,8 +464,8 @@ export default function Home() {
         <section id="how" style={section}>
           <h2 style={h2Style}>See it in action</h2>
           <p style={{ ...bodyStyle, maxWidth: '40rem', marginBottom: '3rem' }}>
-            Four steps, all on the customer's own phone. These are examples of what your customers
-            and your manager see.
+            This is what happens on the customer's phone, and what your manager sees. Tap a star in
+            step 2 to see where each rating is sent.
           </p>
           <Storyboard />
         </section>
@@ -476,13 +522,14 @@ export default function Home() {
                 Your stand, setup and delivery are all included.
               </div>
               <div style={{ marginTop: '1.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <a href={contactHref} style={ctaStyle}>{CTA_TEXT}</a>
-                {PAYSTACK_LINK && (
-                  <a href={PAYSTACK_LINK} target="_blank" rel="noreferrer" style={ghostStyle}>
-                    Subscribe online
-                  </a>
-                )}
+                <a href={subscribeHref} target={subscribeTarget} rel="noreferrer" style={ctaStyle}>
+                  {SUBSCRIBE_TEXT}
+                </a>
+                <a href={contactHref} style={ghostStyle}>Contact us first</a>
               </div>
+              <p style={{ ...bodyStyle, fontSize: '0.85rem', marginTop: '0.9rem', maxWidth: '18rem' }}>
+                {SUBSCRIBE_NOTE}
+              </p>
             </div>
             <ul style={{ flex: '2 1 20rem', margin: 0, padding: 0, listStyle: 'none' }}>
               {included.map((item) => (
