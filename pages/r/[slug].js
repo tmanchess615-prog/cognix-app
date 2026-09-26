@@ -59,10 +59,6 @@ const buttonStyle = {
   border: 'none', cursor: 'pointer', color: '#fff', background: c.electric,
   textDecoration: 'none',
 };
-const ghostLinkStyle = {
-  display: 'inline-block', marginTop: '0.9rem', color: c.muted, fontSize: '0.85rem',
-  textDecoration: 'underline',
-};
 const textareaStyle = {
   width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '0.5rem',
   border: '1px solid ' + c.line, background: c.bg, color: c.text, fontSize: '1rem',
@@ -203,9 +199,6 @@ function Rating({ client }) {
           <button type="submit" style={{ ...buttonStyle, marginTop: '0.9rem' }}>
             Send to the manager
           </button>
-          <a href={client.google_review_url} style={ghostLinkStyle}>
-            Prefer to post on Google? Leave a public review
-          </a>
         </form>
       )}
 
