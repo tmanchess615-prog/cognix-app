@@ -19,12 +19,19 @@ export async function getServerSideProps({ params }) {
   try {
     const { data, error } = await supabase
       .from('clients')
-      .select('id, slug, business_name, google_review_url, manager_email, logo_url, accent_color')
+      .select('id, slug, business_name, google_review_url, manager_email, logo_url, accent_color, active')
       .eq('slug', slug)
       .maybeSingle();
 
     if (error) throw error;
     if (!data) return { props: { state: 'missing' } };
+
+    // Switched off from Supabase (Table Editor > clients > active = false),
+    // for example when a client has not paid. Customers see a polite
+    // message and nothing is sent anywhere.
+    if (data.active === false) {
+      return { props: { state: 'paused' } };
+    }
 
     if (!data.google_review_url || !data.manager_email) {
       return { props: { state: 'incomplete' } };
@@ -275,6 +282,18 @@ export default function RouterPage(props) {
       <Shell title="Page not found" accentColor={DEFAULT_ACCENT}>
         <h1 style={headingStyle}>This link is not set up</h1>
         <p style={mutedStyle}>Please ask a member of staff for help.</p>
+      </Shell>
+    );
+  }
+
+  if (props.state === 'paused') {
+    return (
+      <Shell title="Feedback page paused" accentColor={DEFAULT_ACCENT}>
+        <h1 style={headingStyle}>Thank you for stopping by</h1>
+        <p style={mutedStyle}>
+          This feedback page is not taking responses right now. Please ask a member of
+          staff if you would like to share your experience.
+        </p>
       </Shell>
     );
   }
