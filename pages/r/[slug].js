@@ -10,7 +10,8 @@ import { supabase } from '../../lib/supabaseClient';
 // client's Google review page.
 // PATH B (1, 2 or 3 stars): a private feedback box that builds a
 // ready-to-send email to the manager, so nothing bad reaches Google by
-// default.
+// default. The customer can also leave a phone number if they are happy
+// to be called back about it.
 // ---------------------------------------------------------------------------
 export async function getServerSideProps({ params }) {
   const slug = String(params.slug || '').toLowerCase();
@@ -19,7 +20,9 @@ export async function getServerSideProps({ params }) {
   try {
     const { data, error } = await supabase
       .from('clients')
-      .select('id, slug, business_name, google_review_url, manager_email, logo_url, accent_color, active')
+      .select(
+        'id, slug, business_name, google_review_url, manager_email, logo_url, accent_color, active, footer_text'
+      )
       .eq('slug', slug)
       .maybeSingle();
 
@@ -44,14 +47,16 @@ export async function getServerSideProps({ params }) {
 }
 
 // ---------------------------------------------------------------------------
-// Text in three languages. Only the survey itself is translated - the
+// Text in five languages. Only the survey itself is translated - the
 // "not set up" / "not ready" / "error" screens stay in English, since
 // those are seen by you (or nobody) rather than a customer.
 //
-// NOTE: these are machine-drafted translations, the isiZulu ones in
-// particular. Have a fluent speaker check them before relying on them
-// with real customers - wrong wording on a public page reflects on the
-// business it belongs to.
+// IMPORTANT: these are machine-drafted translations, not written or
+// checked by a fluent speaker. Confidence is reasonable for Afrikaans,
+// lower for isiZulu, and LOWEST for Sepedi and Tshivenda - please have a
+// fluent speaker of each language check the wording before relying on it
+// with real customers. Wrong wording on a public page reflects on the
+// business it belongs to, not just you.
 // ---------------------------------------------------------------------------
 const STR = {
   en: {
@@ -67,6 +72,8 @@ const STR = {
     experienceHeading: 'How was your experience?',
     experienceSub: 'Let the manager know what happened, so they can make it right.',
     placeholder: 'What went wrong?',
+    phonePlaceholder: 'Your phone number (optional)',
+    phoneHelp: 'So the manager can call you back if needed.',
     sendBtn: 'Send to the manager',
     sentHeading: 'Your message is ready to send',
     sentSub: (b) => `We've opened your email app with a message already written for ${b} `
@@ -87,6 +94,8 @@ const STR = {
     experienceHeading: 'Hoe was jou ervaring?',
     experienceSub: 'Laat weet die bestuurder wat gebeur het, sodat hulle dit kan regmaak.',
     placeholder: 'Wat het verkeerd gegaan?',
+    phonePlaceholder: 'Jou telefoonnommer (opsioneel)',
+    phoneHelp: 'Sodat die bestuurder jou kan terugbel indien nodig.',
     sendBtn: 'Stuur aan die bestuurder',
     sentHeading: 'Jou boodskap is gereed om te stuur',
     sentSub: (b) => `Ons het jou e-posprogram oopgemaak met 'n boodskap wat reeds vir ${b} `
@@ -107,6 +116,8 @@ const STR = {
     experienceHeading: 'Kwakunjani ukuhlangenwe nakho kwakho?',
     experienceSub: 'Yazisa umphathi ukuthi kwenzekeni, ukuze bakulungise.',
     placeholder: 'Yini eyonakele?',
+    phonePlaceholder: 'Inombolo yakho yocingo (akuphoqelekile)',
+    phoneHelp: 'Ukuze umphathi akwazi ukukushayela uma kudingeka.',
     sendBtn: 'Thumela kumphathi',
     sentHeading: 'Umlayezo wakho usulungele ukuthunyelwa',
     sentSub: (b) => `Sivule uhlelo lwakho lwe-imeyili ngomlayezo osubhalelwe i-${b} `
@@ -114,53 +125,139 @@ const STR = {
     reopenBtn: 'Ayivulekile? Vula futhi',
     poweredBy: 'Iqhutshwa yi-Cognix',
   },
+  nso: {
+    langName: 'Sepedi',
+    kickerFeedback: 'Maikutlo a potlako',
+    visitHeading: (b) => `Boeti bja gago go ${b} bo be bjang?`,
+    tapStar: 'Tobetša naledi go e hlahloba - go tšea sekonthe fela.',
+    kickerThanks: 'Re a leboga',
+    thanksHeading: 'Re a leboga!',
+    thanksSub: 'Re thabile gore o thabetše! Re go iša go Google gona bjale\u2026',
+    redirectingNote: 'Re go lebiša gona bjale\u2026',
+    kickerMore: 'Re botše go feta',
+    experienceHeading: 'Maitemogelo a gago e be a bjang?',
+    experienceSub: 'Tsebiša molaodi seo se diregilego, gore ba se lokiše.',
+    placeholder: 'Ke eng seo se sa fetago gabotse?',
+    phonePlaceholder: 'Nomoro ya gago ya founu (ga e gapeletšwe)',
+    phoneHelp: 'Gore molaodi a kgone go go founela ge go nyakega.',
+    sendBtn: 'Romela go molaodi',
+    sentHeading: 'Molaetša wa gago o loketše go romelwa',
+    sentSub: (b) => `Re butše app ya gago ya email ka molaetša o šetšego o ngwadilwe bakeng sa ${b} `
+      + '- hlahloba fela gomme o romele.',
+    reopenBtn: 'Ga se ya bulega? E bule gape',
+    poweredBy: 'E hlohleletšwa ke Cognix',
+  },
+  ve: {
+    langName: 'Tshivenda',
+    kickerFeedback: 'Mafhungo a u ṱavhanya',
+    visitHeading: (b) => `Vhutsimbi hau kha ${b} ho vha hu tini?`,
+    tapStar: 'Kwama naledzi u vhala - zwi dzhia sekonde fhedzi.',
+    kickerThanks: 'Ndi a livhuwa',
+    thanksHeading: 'Ndi a livhuwa!',
+    thanksSub: 'Ri takalela uri wo zwi ḓiphina! Ri khou ni isa kha Google zwino\u2026',
+    redirectingNote: 'Ri khou ni livhisa zwino\u2026',
+    kickerMore: 'Ri vhudzeni zwinzhi',
+    experienceHeading: 'Vhutsimbi hau ho vha hu tini?',
+    experienceSub: 'Vhudzani mulanguli zwe zwa itea, uri vha zwi lugise.',
+    placeholder: 'Ndi mini tsho khakhelaho?',
+    phonePlaceholder: 'Nomboro yau ya luṱingo (a si vhukuma)',
+    phoneHelp: 'Uri mulanguli a kone u ni fonela arali zwi tshi khou ṱoḓea.',
+    sendBtn: 'Rumela kha mulanguli',
+    sentHeading: 'Mulaedza wau wo lugela u rumelwa',
+    sentSub: (b) => `Ro vula app yau ya imeili na mulaedza wo no ṅwalwa u itela ${b} `
+      + '- sedzani fhedzi na u rumela.',
+    reopenBtn: 'A yo ngo vulea? I vule hafhu',
+    poweredBy: 'I shumiswa nga Cognix',
+  },
 };
 
+const LANGS = ['en', 'af', 'zu', 'nso', 've'];
+
 // Fixed template wording for the email, per language. The customer's own
-// typed feedback is never translated - only the wording around it is.
+// typed feedback - and their phone number - are never translated, only
+// the wording around them is.
 const EMAIL = {
-  en: (business, rating, feedback) => {
+  en: (business, rating, feedback, phone) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || "I don't have more specific details to add beyond the rating, but wanted to let you know.";
+    const phoneLine = phone.trim() ? `\n\nPhone number (for a call back): ${phone.trim()}` : '';
     return {
       subject: `Feedback on my visit to ${business} (${rating}/5)`,
       body: 'Hi there,\n\n'
         + `I visited ${business} recently and wanted to share some quick feedback. `
         + `I'd rate the visit ${rating} out of 5 (${starLine}).\n\n`
-        + `${detail}\n\n`
+        + `${detail}${phoneLine}\n\n`
         + 'I hope this is useful - thanks for taking the time to read it.\n\n'
         + '\u2014 Sent via the Cognix Smart Counter Stand',
     };
   },
-  af: (business, rating, feedback) => {
+  af: (business, rating, feedback, phone) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'Ek het nie meer spesifieke besonderhede om by te voeg nie, buiten die gradering, '
         + 'maar wou jou net laat weet.';
+    const phoneLine = phone.trim() ? `\n\nTelefoonnommer (vir 'n terugbel): ${phone.trim()}` : '';
     return {
       subject: `Terugvoer oor my besoek by ${business} (${rating}/5)`,
       body: 'Hallo,\n\n'
         + `Ek het onlangs ${business} besoek en wil graag vinnige terugvoer gee. `
         + `Ek sou die besoek ${rating} uit 5 gradeer (${starLine}).\n\n`
-        + `${detail}\n\n`
+        + `${detail}${phoneLine}\n\n`
         + 'Ek hoop dit is nuttig - dankie dat jy die tyd geneem het om dit te lees.\n\n'
         + '\u2014 Gestuur via die Cognix Slim Toonbankstaander',
     };
   },
-  zu: (business, rating, feedback) => {
+  zu: (business, rating, feedback, phone) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'Anginayo eminye imininingwane ethile ukuyengeza ngale kokulinganisela, '
         + 'kodwa bengifuna ukukwazisa.';
+    const phoneLine = phone.trim()
+      ? `\n\nInombolo yocingo (ukuze babuye bakushayele): ${phone.trim()}` : '';
     return {
       subject: `Impendulo mayelana nokuvakasha kwami e-${business} (${rating}/5)`,
       body: 'Sawubona,\n\n'
         + `Ngivakashele e-${business} muva nje futhi bengifuna ukwabelana ngempendulo esheshayo. `
         + `Ngingayilinganisela le vakasho ngo-${rating} kwangu-5 (${starLine}).\n\n`
-        + `${detail}\n\n`
+        + `${detail}${phoneLine}\n\n`
         + 'Ngithemba ukuthi lokhu kuzosiza - ngiyabonga ngesikhathi sakho sokufunda lokhu.\n\n'
         + '\u2014 Kuthunyelwe nge-Cognix Smart Counter Stand',
+    };
+  },
+  nso: (business, rating, feedback, phone) => {
+    const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
+    const detail = feedback.trim()
+      || 'Ga ke na dintlha tše dingwe tše di kgethegilego go tlaleletša ntle le tekanyo, '
+        + 'eupša ke be ke nyaka go go tsebiša.';
+    const phoneLine = phone.trim()
+      ? `\n\nNomoro ya founu (bakeng sa go go founela): ${phone.trim()}` : '';
+    return {
+      subject: `Maikutlo ka boeti bja ka go ${business} (${rating}/5)`,
+      body: 'Dumela,\n\n'
+        + `Ke etetše ${business} morago bjale gomme ke nyaka go abelana maikutlo a potlako. `
+        + `Nka lekanya boeti bjo ${rating} go tše 5 (${starLine}).\n\n`
+        + `${detail}${phoneLine}\n\n`
+        + 'Ke tshepa gore se se a thuša - ke leboga nako yeo o e tšeetšego go e bala.\n\n'
+        + '\u2014 E rometšwe ka Cognix Smart Counter Stand',
+    };
+  },
+  ve: (business, rating, feedback, phone) => {
+    const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
+    const detail = feedback.trim()
+      || 'A thi na mafhungo manzhi a re ṅwalela nnḓa ha mulinganyo, fhedzi ndo vha ndi tshi'
+        + ' khou ṱoḓa u ni vhudza.';
+    const phoneLine = phone.trim()
+      ? `\n\nNomboro ya luṱingo (u itela u ni fonela): ${phone.trim()}` : '';
+    return {
+      subject: `Mafhungo nga ha vhutsimbi hanga kha ${business} (${rating}/5)`,
+      body: 'Ndaa,\n\n'
+        + `Ndo dalela ${business} zwenezwino nahone ndo vha ndi tshi khou ṱoḓa u abelana `
+        + `mafhungo a u ṱavhanya. Ndi ḓo linganyisa vhutsimbi uhu nga ${rating} kha 5 (${starLine}).\n\n`
+        + `${detail}${phoneLine}\n\n`
+        + 'Ndi fulufhela uri hezwi zwi ḓo shuma - ndi a livhuwa nga tshifhinga tshau tsha u '
+        + 'vhala hezwi.\n\n'
+        + '\u2014 Zwo rumelwa nga Cognix Smart Counter Stand',
     };
   },
 };
@@ -204,8 +301,9 @@ const textareaStyle = {
   border: '1px solid ' + c.line, background: c.bg, color: c.text, fontSize: '1rem',
   fontFamily: sans, resize: 'vertical', lineHeight: 1.5,
 };
+const inputStyle = { ...textareaStyle, resize: 'none' };
 
-function Shell({ title, accentColor, children }) {
+function Shell({ title, accentColor, footerText, children }) {
   return (
     <div style={pageStyle}>
       <Head>
@@ -234,14 +332,14 @@ function Shell({ title, accentColor, children }) {
         {children}
         <p style={{ color: '#5b6b8c', fontSize: '0.72rem', textAlign: 'center',
           letterSpacing: '0.04em', margin: '1.75rem 0 0 0' }}>
-          {STR.en.poweredBy}
+          {footerText || STR.en.poweredBy}
         </p>
       </div>
     </div>
   );
 }
 
-function StarRow({ value, onRate, accentColor }) {
+function StarRow({ value, onRate }) {
   return (
     <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.4rem' }}>
       {[1, 2, 3, 4, 5].map((n) => (
@@ -258,15 +356,15 @@ function StarRow({ value, onRate, accentColor }) {
 
 function LangToggle({ lang, onChange, accentColor }) {
   return (
-    <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem' }}>
-      {['en', 'af', 'zu'].map((code) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1.1rem' }}>
+      {LANGS.map((code) => (
         <button key={code} onClick={() => onChange(code)} className="cx-lang"
           aria-label={STR[code].langName}
           style={{
             border: '1px solid ' + (lang === code ? accentColor : c.line),
             background: lang === code ? accentColor + '26' : 'transparent',
             color: lang === code ? '#fff' : c.muted,
-            borderRadius: '9999px', padding: '0.3rem 0.75rem', fontSize: '0.78rem',
+            borderRadius: '9999px', padding: '0.3rem 0.7rem', fontSize: '0.76rem',
             fontWeight: 700, cursor: 'pointer', letterSpacing: '0.03em',
           }}>
           {code.toUpperCase()}
@@ -325,6 +423,7 @@ export default function RouterPage(props) {
 function Rating({ client }) {
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
+  const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('idle'); // idle | spinning | redirecting | sent
   const [mailHref, setMailHref] = useState('');
   const [lang, setLang] = useState('en');
@@ -333,6 +432,7 @@ function Rating({ client }) {
   const accentColor = client.accent_color && HEX_RE.test(client.accent_color)
     ? client.accent_color
     : DEFAULT_ACCENT;
+  const footerText = (client.footer_text && client.footer_text.trim()) || t.poweredBy;
 
   const buttonStyle = {
     display: 'block', boxSizing: 'border-box', width: '100%', padding: '1rem 1rem',
@@ -367,7 +467,7 @@ function Rating({ client }) {
   async function handleSendToManager(e) {
     e.preventDefault();
 
-    const { subject, body } = EMAIL[lang](client.business_name, rating, feedback);
+    const { subject, body } = EMAIL[lang](client.business_name, rating, feedback, phone);
     const href = 'mailto:' + client.manager_email
       + '?subject=' + encodeURIComponent(subject)
       + '&body=' + encodeURIComponent(body);
@@ -380,6 +480,7 @@ function Rating({ client }) {
       client_id: client.id,
       stars: rating,
       feedback: feedback.slice(0, 1000),
+      contact_phone: phone.trim().slice(0, 40) || null,
     });
     if (error) {
       // eslint-disable-next-line no-console
@@ -388,7 +489,7 @@ function Rating({ client }) {
   }
 
   return (
-    <Shell title={client.business_name} accentColor={accentColor}>
+    <Shell title={client.business_name} accentColor={accentColor} footerText={footerText}>
       {client.logo_url && (
         <img src={client.logo_url} alt={client.business_name}
           onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -401,7 +502,7 @@ function Rating({ client }) {
           <p style={kickerStyle}>{t.kickerFeedback}</p>
           <h1 style={headingStyle}>{t.visitHeading(client.business_name)}</h1>
           <p style={mutedStyle}>{t.tapStar}</p>
-          <StarRow value={rating} onRate={handleRating} accentColor={accentColor} />
+          <StarRow value={rating} onRate={handleRating} />
         </div>
       )}
 
@@ -436,6 +537,12 @@ function Rating({ client }) {
           <textarea rows={4} maxLength={1000} value={feedback} className="cx-textarea"
             onChange={(e) => setFeedback(e.target.value)} style={textareaStyle}
             placeholder={t.placeholder} />
+          <input type="tel" maxLength={40} value={phone} className="cx-textarea"
+            onChange={(e) => setPhone(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+            placeholder={t.phonePlaceholder} />
+          <p style={{ color: c.muted, fontSize: '0.78rem', margin: '0.4rem 0 0 0' }}>
+            {t.phoneHelp}
+          </p>
           <button type="submit" className="cx-btn" style={{ ...buttonStyle, marginTop: '1rem' }}>
             {t.sendBtn}
           </button>
