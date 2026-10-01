@@ -7,7 +7,7 @@ const PHONE_TEL = '0622393280';
 const WHATSAPP_NUMBER = '27622393280'; // your number with 27 instead of the leading 0
 const EMAIL = 'lekalakalamashilo23@gmail.com';
 const DELIVERY = '7-10 working days anywhere in South Africa via tracked express courier';
-const PAYSTACK_LINK = 'https://paystack.shop/pay/bc2bpk6ows';
+const PAYSTACK_LINK = 'https://paystack.shop/pay/kc57y8bkar';
 // -----------------------------------------------------------------------------
 
 const c = {
