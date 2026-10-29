@@ -7,7 +7,8 @@ const PHONE_TEL = '0622393280';
 const WHATSAPP_NUMBER = '27622393280'; // your number with 27 instead of the leading 0
 const EMAIL = 'lekalakalamashilo23@gmail.com';
 const DELIVERY = '7-10 working days anywhere in South Africa via tracked express courier';
-const PAYSTACK_LINK = 'https://paystack.shop/pay/kc57y8bkar';
+const PAYSTACK_LINK_STARTER = ''; // paste your R499/month Paystack payment page link here
+const PAYSTACK_LINK_PREMIUM = 'https://paystack.shop/pay/bc2bpk6ows';
 // -----------------------------------------------------------------------------
 
 const c = {
@@ -18,16 +19,55 @@ const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Ar
 
 const whatsappHref = 'https://wa.me/' + WHATSAPP_NUMBER;
 const contactHref = whatsappHref + '?text=' + encodeURIComponent(
-  'Hi Cognix, I would like to know more about the Smart Counter Stand (R1,499/mo).'
+  'Hi Cognix, I would like to know more about the Smart Counter Stand.'
 );
 const SUBSCRIBE_TEXT = 'Subscribe now';
-const SUBSCRIBE_NOTE = "You'll be taken to our secure Paystack checkout to start your "
-  + "R1,499/month subscription. Once you're set up, your Smart Counter Stand ships to you.";
-const subscribeHref = PAYSTACK_LINK || contactHref;
-const subscribeTarget = PAYSTACK_LINK ? '_blank' : undefined;
+
+function subscribeNote(price, link) {
+  return link
+    ? "You'll be taken to our secure Paystack checkout to start your R" + price
+      + "/month subscription. Once you're set up, your Smart Counter Stand ships to you."
+    : "Message us to get started - your R" + price + "/month subscription and Smart Counter "
+      + "Stand will be set up for you.";
+}
+
+const PLANS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: '499',
+    blurb: 'A straightforward way to get more Google reviews, for smaller local businesses.',
+    link: PAYSTACK_LINK_STARTER,
+    included: [
+      'One Smart Counter Stand with NFC tap and QR code',
+      'Set up to open your own Google review page',
+      'Private feedback goes to your manager by email',
+      'Free tracked delivery in 7-10 working days, anywhere in South Africa',
+      'No setup fee. Cancel any time',
+    ],
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    price: '1,499',
+    blurb: 'Everything in Starter, with your own branding and more ways for customers to reach you.',
+    link: PAYSTACK_LINK_PREMIUM,
+    highlight: true,
+    included: [
+      'Everything in Starter',
+      'Your own logo, brand colour and footer shown on your page',
+      'Feedback in 5 languages: English, Afrikaans, isiZulu, Sepedi, Tshivenda',
+      'Customers can leave a phone number for a call-back',
+      'Priority support from Cognix',
+    ],
+  },
+];
+
+const subscribeHref = '#pricing';
+const subscribeTarget = undefined;
 
 const DESCRIPTION = 'The Cognix Smart Counter Stand makes it easy for customers to leave a Google '
-  + 'review, and lets unhappy customers message your manager privately. R1,499 per month.';
+  + 'review, and lets unhappy customers message your manager privately. Plans from R499 per month.';
 
 const wrap = { maxWidth: '68rem', margin: '0 auto', padding: '0 1.25rem' };
 const h2Style = {
@@ -78,13 +118,6 @@ const assets = [
   },
 ];
 
-const included = [
-  'One custom-branded acrylic Smart Counter Stand with NFC tap and QR code',
-  'Set up to open your own Google review page',
-  'Private feedback goes to your manager on WhatsApp or email',
-  'Free tracked delivery in 7-10 working days, anywhere in South Africa',
-  'No setup fee. Cancel any time',
-];
 
 const journey = [
   ['Contact us', 'Message or call us and we will answer your questions.'],
@@ -415,10 +448,9 @@ export default function Home() {
             <a href="#assets" style={navLink}>What we need</a>
             <a href="#pricing" style={navLink}>Pricing</a>
             <a href="#faq" style={navLink}>Questions</a>
-            <a href={subscribeHref} target={subscribeTarget} rel="noreferrer"
-              style={{ ...navLink, color: '#fff', background: c.electric,
+            <a href={subscribeHref} style={{ ...navLink, color: '#fff', background: c.electric,
                       padding: '0.55rem 1.1rem', borderRadius: '0.5rem' }}>
-              Subscribe now
+              See pricing
             </a>
           </div>
         </div>
@@ -440,13 +472,13 @@ export default function Home() {
               </p>
               <div style={{ marginTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem 1.5rem',
                             alignItems: 'center' }}>
-                <a href={subscribeHref} target={subscribeTarget} rel="noreferrer" style={ctaStyle}>
-                  {SUBSCRIBE_TEXT}
+                <a href={subscribeHref} style={ctaStyle}>
+                  See pricing
                 </a>
                 <a href="#how" style={{ ...contactLink, fontSize: '1.02rem' }}>See how it works</a>
               </div>
               <p style={{ ...bodyStyle, fontSize: '0.9rem', marginTop: '1.1rem', maxWidth: '28rem' }}>
-                {SUBSCRIBE_NOTE}
+                Two simple plans, from R499 a month. No setup fee either way.
               </p>
               <p style={{ ...bodyStyle, fontSize: '0.92rem', marginTop: '0.6rem', maxWidth: '32rem' }}>
                 No setup fee. Cancel any time.{' '}
@@ -504,62 +536,65 @@ export default function Home() {
         </section>
 
         <section id="pricing" style={section}>
-          <h2 style={h2Style}>One simple monthly price</h2>
+          <h2 style={h2Style}>Two plans - choose what fits your business</h2>
           <p style={{ ...bodyStyle, maxWidth: '40rem', marginBottom: '2.5rem' }}>
-            Everything below is included. There is no setup fee and no contract to break.
+            Both plans include the hardware stand, automatic Google review routing for happy
+            customers, and private feedback for everyone else. No setup fee, and no contract to
+            break, on either plan.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', background: c.surface,
-                        border: '1px solid ' + c.electric, borderRadius: '1rem', padding: '2rem',
-                        boxShadow: '0 0 48px rgba(31, 111, 255, 0.18)' }}>
-            <div style={{ flex: '1 1 14rem' }}>
-              <div style={{ fontSize: '3.4rem', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
-                R1,499
-                <span style={{ fontSize: '1.2rem', fontWeight: 600, color: c.muted,
-                               letterSpacing: 0 }}> /month</span>
-              </div>
-              <div style={{ color: c.text, marginTop: '0.75rem', fontWeight: 600, maxWidth: '15rem',
-                            lineHeight: 1.45 }}>
-                Your stand, setup and delivery are all included.
-              </div>
-              <div style={{ marginTop: '1.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <a href={subscribeHref} target={subscribeTarget} rel="noreferrer" style={ctaStyle}>
-                  {SUBSCRIBE_TEXT}
-                </a>
-                <a href={contactHref} style={ghostStyle}>Contact us first</a>
-              </div>
-              <p style={{ ...bodyStyle, fontSize: '0.85rem', marginTop: '0.9rem', maxWidth: '18rem' }}>
-                {SUBSCRIBE_NOTE}
-              </p>
-            </div>
-            <ul style={{ flex: '2 1 20rem', margin: 0, padding: 0, listStyle: 'none' }}>
-              {included.map((item) => (
-                <li key={item} style={{ display: 'flex', gap: '0.75rem', padding: '0.7rem 0',
-                                        borderBottom: '1px solid ' + c.line, lineHeight: 1.5 }}>
-                  <span style={{ color: c.cyan, fontWeight: 800 }}>&#10003;</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '3.5rem 0 1.5rem 0' }}>
-            From first message to your counter
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem 2rem' }}>
-            {journey.map((j, i) => (
-              <div key={j[0]} style={{ flex: '1 1 15rem', display: 'flex', gap: '1rem' }}>
-                <div style={{ flex: '0 0 2.2rem', height: '2.2rem', borderRadius: '9999px',
-                              background: c.electric, display: 'flex', alignItems: 'center',
-                              justifyContent: 'center', fontWeight: 800 }}>
-                  {i + 1}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'stretch' }}>
+            {PLANS.map((plan) => {
+              const planHref = plan.link || contactHref;
+              const planTarget = plan.link ? '_blank' : undefined;
+              return (
+                <div key={plan.id} style={{ flex: '1 1 17rem', background: c.surface,
+                    border: '1px solid ' + (plan.highlight ? c.electric : c.line),
+                    borderRadius: '1rem', padding: '2rem', boxSizing: 'border-box',
+                    boxShadow: plan.highlight ? '0 0 48px rgba(31, 111, 255, 0.18)' : 'none' }}>
+                  {plan.highlight && (
+                    <span style={{ display: 'inline-block', background: c.electric, color: '#fff',
+                      fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase', padding: '0.25rem 0.6rem', borderRadius: '9999px',
+                      marginBottom: '0.9rem' }}>
+                      Most popular
+                    </span>
+                  )}
+                  <div style={{ fontSize: '1.15rem', fontWeight: 800 }}>{plan.name}</div>
+                  <div style={{ fontSize: '2.6rem', fontWeight: 800, letterSpacing: '-0.03em',
+                                lineHeight: 1, marginTop: '0.4rem' }}>
+                    R{plan.price}
+                    <span style={{ fontSize: '1.05rem', fontWeight: 600, color: c.muted,
+                                   letterSpacing: 0 }}> /month</span>
+                  </div>
+                  <p style={{ ...bodyStyle, marginTop: '0.75rem', minHeight: '2.6rem' }}>
+                    {plan.blurb}
+                  </p>
+                  <ul style={{ margin: '1.25rem 0 0 0', padding: 0, listStyle: 'none' }}>
+                    {plan.included.map((item) => (
+                      <li key={item} style={{ display: 'flex', gap: '0.6rem', padding: '0.55rem 0',
+                                              borderBottom: '1px solid ' + c.line, lineHeight: 1.45,
+                                              fontSize: '0.92rem' }}>
+                        <span style={{ color: c.cyan, fontWeight: 800 }}>&#10003;</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <a href={planHref} target={planTarget} rel="noreferrer"
+                      style={{ ...ctaStyle, display: 'block', textAlign: 'center' }}>
+                      {SUBSCRIBE_TEXT}
+                    </a>
+                  </div>
+                  <p style={{ ...bodyStyle, fontSize: '0.82rem', marginTop: '0.8rem' }}>
+                    {subscribeNote(plan.price, plan.link)}
+                  </p>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 800, marginBottom: '0.3rem' }}>{j[0]}</div>
-                  <p style={{ ...bodyStyle, fontSize: '0.95rem' }}>{j[1]}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          <p style={{ ...bodyStyle, fontSize: '0.9rem', marginTop: '1.5rem' }}>
+            Not sure which one fits? <a href={contactHref} style={contactLink}>Contact us first</a>
+          </p>
         </section>
 
         <section id="faq" style={section}>
