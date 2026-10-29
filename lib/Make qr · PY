@@ -1,0 +1,90 @@
+import ctypes, sys
+from PIL import Image, ImageDraw, ImageFont
+
+lib = ctypes.CDLL('libqrencode.so.4')
+
+class QRcode(ctypes.Structure):
+    _fields_ = [("version", ctypes.c_int), ("width", ctypes.c_int),
+                ("data", ctypes.POINTER(ctypes.c_ubyte))]
+
+lib.QRcode_encodeString.restype = ctypes.POINTER(QRcode)
+lib.QRcode_encodeString.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int,
+                                    ctypes.c_int, ctypes.c_int]
+lib.QRcode_free.argtypes = [ctypes.POINTER(QRcode)]
+
+def qr_matrix(text, level=3):
+    # level 3 = H (about 30% damage tolerance) - best for printed, handled stands
+    p = lib.QRcode_encodeString(text.encode('utf-8'), 0, level, 2, 1)
+    if not p:
+        raise RuntimeError('QR encoding failed')
+    q = p.contents
+    n = q.width
+    raw = bytes(q.data[0:n * n])
+    m = [[raw[y * n + x] & 1 for x in range(n)] for y in range(n)]
+    lib.QRcode_free(p)
+    return m
+
+def qr_image(text, target=1000, quiet=4):
+    m = qr_matrix(text)
+    n = len(m)
+    total = n + quiet * 2
+    scale = max(1, target // total)
+    size = total * scale
+    img = Image.new('RGB', (size, size), 'white')
+    d = ImageDraw.Draw(img)
+    for y in range(n):
+        for x in range(n):
+            if m[y][x]:
+                x0 = (x + quiet) * scale
+                y0 = (y + quiet) * scale
+                d.rectangle([x0, y0, x0 + scale - 1, y0 + scale - 1], fill='black')
+    return img, n
+
+def font(size, bold=True):
+    for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold
+              else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+              '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf']:
+        try:
+            return ImageFont.truetype(p, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def print_card(img, business, link):
+    W = 1200
+    qr = img.resize((900, 900), Image.NEAREST)
+    card = Image.new('RGB', (W, 1640), 'white')
+    d = ImageDraw.Draw(card)
+    def center(txt, y, f, fill):
+        w = d.textlength(txt, font=f)
+        d.text(((W - w) / 2, y), txt, font=f, fill=fill)
+    center('Scan to rate your visit', 70, font(70), (15, 31, 61))
+    center(business, 165, font(44, False), (80, 90, 110))
+    card.paste(qr, (150, 270))
+    center('Takes a few seconds. No app needed.', 1215, font(40, False), (80, 90, 110))
+    center(link.replace('https://', ''), 1300, font(38), (31, 111, 255))
+    d.line([(150, 1400), (W - 150, 1400)], fill=(210, 215, 225), width=3)
+    center('Powered by Cognix', 1450, font(34, False), (120, 130, 150))
+    return card
+
+def decode_check(path, expected):
+    try:
+        import cv2
+    except Exception:
+        return None
+    im = cv2.imread(path)
+    val, _, _ = cv2.QRCodeDetector().detectAndDecode(im)
+    return val == expected
+
+if __name__ == '__main__':
+    business = sys.argv[1]
+    link = sys.argv[2]
+    stem = sys.argv[3]
+    img, n = qr_image(link)
+    plain = f'/mnt/user-data/outputs/{stem}-qr.png'
+    card = f'/mnt/user-data/outputs/{stem}-qr-print-card.png'
+    img.save(plain)
+    print_card(img, business, link).save(card)
+    print('modules per side:', n)
+    print('plain code decodes back to the link:', decode_check(plain, link))
+    print('print card decodes back to the link:', decode_check(card, link))
