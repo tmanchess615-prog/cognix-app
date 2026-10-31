@@ -448,6 +448,7 @@ export default function Home() {
             <a href="#assets" style={navLink}>What we need</a>
             <a href="#pricing" style={navLink}>Pricing</a>
             <a href="#faq" style={navLink}>Questions</a>
+            <a href="/portal" style={navLink}>Client login</a>
             <a href={subscribeHref} style={{ ...navLink, color: '#fff', background: c.electric,
                       padding: '0.55rem 1.1rem', borderRadius: '0.5rem' }}>
               See pricing
