@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -18,15 +18,24 @@ export async function getServerSideProps({ params }) {
   if (!slug) return { props: { state: 'missing' } };
 
   try {
-    const { data, error } = await supabase
-      .from('clients')
-      .select(
-        'id, slug, business_name, google_review_url, manager_email, logo_url, accent_color, active, footer_text'
-      )
-      .eq('slug', slug)
-      .maybeSingle();
-
-    if (error) throw error;
+    // Look up this one business through a safe database function, so the
+    // public side never needs permission to list every client. If the function
+    // has not been created yet, fall back to reading the table directly.
+    let data = null;
+    const viaFunction = await supabase.rpc('get_client_by_slug', { p_slug: slug });
+    if (!viaFunction.error) {
+      data = Array.isArray(viaFunction.data) ? viaFunction.data[0] || null : viaFunction.data || null;
+    } else {
+      const direct = await supabase
+        .from('clients')
+        .select(
+          'id, slug, business_name, google_review_url, manager_email, logo_url, accent_color, active, footer_text'
+        )
+        .eq('slug', slug)
+        .maybeSingle();
+      if (direct.error) throw direct.error;
+      data = direct.data;
+    }
     if (!data) return { props: { state: 'missing' } };
 
     // Switched off from Supabase (Table Editor > clients > active = false),
@@ -434,6 +443,20 @@ function Rating({ client }) {
     : DEFAULT_ACCENT;
   const footerText = (client.footer_text && client.footer_text.trim()) || t.poweredBy;
 
+  // Counts for the client portal. Fire-and-forget: a failure here never
+  // affects the customer.
+  function logEvent(type) {
+    supabase.from('scans_log').insert({ client_id: client.id, interaction_type: type })
+      .then(({ error }) => {
+        // eslint-disable-next-line no-console
+        if (error) console.error('Could not log event:', error.message);
+      });
+  }
+
+  useEffect(() => {
+    logEvent('tap_or_scan');
+  }, []);
+
   const buttonStyle = {
     display: 'block', boxSizing: 'border-box', width: '100%', padding: '1rem 1rem',
     borderRadius: '0.65rem', fontSize: '1rem', fontWeight: 700, textAlign: 'center',
@@ -450,6 +473,7 @@ function Rating({ client }) {
 
   function handleRating(n) {
     setRating(n);
+    logEvent(n >= 4 ? 'google_redirect' : 'private_intercept');
     if (n >= 4) {
       // A short, deliberate pause with a spinner then a checkmark, instead
       // of navigating away instantly - so the "thank you" actually gets
