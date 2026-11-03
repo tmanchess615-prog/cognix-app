@@ -82,7 +82,9 @@ const STR = {
     experienceSub: 'Let the manager know what happened, so they can make it right.',
     placeholder: 'What went wrong?',
     phonePlaceholder: 'Your phone number (optional)',
-    phoneHelp: 'So the manager can call you back if needed.',
+    namePlaceholder: 'Your name (optional)',
+    emailPlaceholder: 'Your email (optional)',
+    phoneHelp: 'Only used so the manager can follow up on your feedback.',
     sendBtn: 'Send to the manager',
     sentHeading: 'Your message is ready to send',
     sentSub: (b) => `We've opened your email app with a message already written for ${b} `
@@ -104,7 +106,9 @@ const STR = {
     experienceSub: 'Laat weet die bestuurder wat gebeur het, sodat hulle dit kan regmaak.',
     placeholder: 'Wat het verkeerd gegaan?',
     phonePlaceholder: 'Jou telefoonnommer (opsioneel)',
-    phoneHelp: 'Sodat die bestuurder jou kan terugbel indien nodig.',
+    namePlaceholder: 'Jou naam (opsioneel)',
+    emailPlaceholder: 'Jou e-pos (opsioneel)',
+    phoneHelp: 'Word net gebruik sodat die bestuurder op jou terugvoer kan opvolg.',
     sendBtn: 'Stuur aan die bestuurder',
     sentHeading: 'Jou boodskap is gereed om te stuur',
     sentSub: (b) => `Ons het jou e-posprogram oopgemaak met 'n boodskap wat reeds vir ${b} `
@@ -126,7 +130,9 @@ const STR = {
     experienceSub: 'Yazisa umphathi ukuthi kwenzekeni, ukuze bakulungise.',
     placeholder: 'Yini eyonakele?',
     phonePlaceholder: 'Inombolo yakho yocingo (akuphoqelekile)',
-    phoneHelp: 'Ukuze umphathi akwazi ukukushayela uma kudingeka.',
+    namePlaceholder: 'Igama lakho (akuphoqelekile)',
+    emailPlaceholder: 'I-imeyili yakho (akuphoqelekile)',
+    phoneHelp: 'Isetshenziselwa kuphela ukuze umphathi alandelele impendulo yakho.',
     sendBtn: 'Thumela kumphathi',
     sentHeading: 'Umlayezo wakho usulungele ukuthunyelwa',
     sentSub: (b) => `Sivule uhlelo lwakho lwe-imeyili ngomlayezo osubhalelwe i-${b} `
@@ -148,7 +154,9 @@ const STR = {
     experienceSub: 'Tsebiša molaodi seo se diregilego, gore ba se lokiše.',
     placeholder: 'Ke eng seo se sa fetago gabotse?',
     phonePlaceholder: 'Nomoro ya gago ya founu (ga e gapeletšwe)',
-    phoneHelp: 'Gore molaodi a kgone go go founela ge go nyakega.',
+    namePlaceholder: 'Leina la gago (ga le gapeletšwe)',
+    emailPlaceholder: 'Emeile ya gago (ga e gapeletšwe)',
+    phoneHelp: 'E dirišetšwa feela gore molaodi a latele maikutlo a gago.',
     sendBtn: 'Romela go molaodi',
     sentHeading: 'Molaetša wa gago o loketše go romelwa',
     sentSub: (b) => `Re butše app ya gago ya email ka molaetša o šetšego o ngwadilwe bakeng sa ${b} `
@@ -170,7 +178,9 @@ const STR = {
     experienceSub: 'Vhudzani mulanguli zwe zwa itea, uri vha zwi lugise.',
     placeholder: 'Ndi mini tsho khakhelaho?',
     phonePlaceholder: 'Nomboro yau ya luṱingo (a si vhukuma)',
-    phoneHelp: 'Uri mulanguli a kone u ni fonela arali zwi tshi khou ṱoḓea.',
+    namePlaceholder: 'Dzina lau (a si vhukuma)',
+    emailPlaceholder: 'Imeili yau (a si vhukuma)',
+    phoneHelp: 'I shumiswa fhedzi uri mulanguli a tevhedze mafhungo au.',
     sendBtn: 'Rumela kha mulanguli',
     sentHeading: 'Mulaedza wau wo lugela u rumelwa',
     sentSub: (b) => `Ro vula app yau ya imeili na mulaedza wo no ṅwalwa u itela ${b} `
@@ -185,12 +195,28 @@ const LANGS = ['en', 'af', 'zu', 'nso', 've'];
 // Fixed template wording for the email, per language. The customer's own
 // typed feedback - and their phone number - are never translated, only
 // the wording around them is.
+const LABELS = {
+  en: { name: 'Name', email: 'Email', phone: 'Phone number (for a call back)' },
+  af: { name: 'Naam', email: 'E-pos', phone: "Telefoonnommer (vir 'n terugbel)" },
+  zu: { name: 'Igama', email: 'I-imeyili', phone: 'Inombolo yocingo (ukuze babuye bakushayele)' },
+  nso: { name: 'Leina', email: 'Emeile', phone: 'Nomoro ya founu (bakeng sa go go founela)' },
+  ve: { name: 'Dzina', email: 'Imeili', phone: 'Nomboro ya luṱingo (u itela u ni fonela)' },
+};
+
+function contactBlock(contact, labels) {
+  const lines = [];
+  if (contact.name.trim()) lines.push(labels.name + ': ' + contact.name.trim());
+  if (contact.email.trim()) lines.push(labels.email + ': ' + contact.email.trim());
+  if (contact.phone.trim()) lines.push(labels.phone + ': ' + contact.phone.trim());
+  return lines.length ? '\n\n' + lines.join('\n') : '';
+}
+
 const EMAIL = {
-  en: (business, rating, feedback, phone) => {
+  en: (business, rating, feedback, contact) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || "I don't have more specific details to add beyond the rating, but wanted to let you know.";
-    const phoneLine = phone.trim() ? `\n\nPhone number (for a call back): ${phone.trim()}` : '';
+    const phoneLine = contactBlock(contact, LABELS.en);
     return {
       subject: `Feedback on my visit to ${business} (${rating}/5)`,
       body: 'Hi there,\n\n'
@@ -201,12 +227,12 @@ const EMAIL = {
         + '\u2014 Sent via the Cognix Smart Counter Stand',
     };
   },
-  af: (business, rating, feedback, phone) => {
+  af: (business, rating, feedback, contact) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'Ek het nie meer spesifieke besonderhede om by te voeg nie, buiten die gradering, '
         + 'maar wou jou net laat weet.';
-    const phoneLine = phone.trim() ? `\n\nTelefoonnommer (vir 'n terugbel): ${phone.trim()}` : '';
+    const phoneLine = contactBlock(contact, LABELS.af);
     return {
       subject: `Terugvoer oor my besoek by ${business} (${rating}/5)`,
       body: 'Hallo,\n\n'
@@ -217,13 +243,12 @@ const EMAIL = {
         + '\u2014 Gestuur via die Cognix Slim Toonbankstaander',
     };
   },
-  zu: (business, rating, feedback, phone) => {
+  zu: (business, rating, feedback, contact) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'Anginayo eminye imininingwane ethile ukuyengeza ngale kokulinganisela, '
         + 'kodwa bengifuna ukukwazisa.';
-    const phoneLine = phone.trim()
-      ? `\n\nInombolo yocingo (ukuze babuye bakushayele): ${phone.trim()}` : '';
+    const phoneLine = contactBlock(contact, LABELS.zu);
     return {
       subject: `Impendulo mayelana nokuvakasha kwami e-${business} (${rating}/5)`,
       body: 'Sawubona,\n\n'
@@ -234,13 +259,12 @@ const EMAIL = {
         + '\u2014 Kuthunyelwe nge-Cognix Smart Counter Stand',
     };
   },
-  nso: (business, rating, feedback, phone) => {
+  nso: (business, rating, feedback, contact) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'Ga ke na dintlha tše dingwe tše di kgethegilego go tlaleletša ntle le tekanyo, '
         + 'eupša ke be ke nyaka go go tsebiša.';
-    const phoneLine = phone.trim()
-      ? `\n\nNomoro ya founu (bakeng sa go go founela): ${phone.trim()}` : '';
+    const phoneLine = contactBlock(contact, LABELS.nso);
     return {
       subject: `Maikutlo ka boeti bja ka go ${business} (${rating}/5)`,
       body: 'Dumela,\n\n'
@@ -251,13 +275,12 @@ const EMAIL = {
         + '\u2014 E rometšwe ka Cognix Smart Counter Stand',
     };
   },
-  ve: (business, rating, feedback, phone) => {
+  ve: (business, rating, feedback, contact) => {
     const starLine = '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating);
     const detail = feedback.trim()
       || 'A thi na mafhungo manzhi a re ṅwalela nnḓa ha mulinganyo, fhedzi ndo vha ndi tshi'
         + ' khou ṱoḓa u ni vhudza.';
-    const phoneLine = phone.trim()
-      ? `\n\nNomboro ya luṱingo (u itela u ni fonela): ${phone.trim()}` : '';
+    const phoneLine = contactBlock(contact, LABELS.ve);
     return {
       subject: `Mafhungo nga ha vhutsimbi hanga kha ${business} (${rating}/5)`,
       body: 'Ndaa,\n\n'
@@ -433,6 +456,8 @@ function Rating({ client }) {
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [status, setStatus] = useState('idle'); // idle | spinning | redirecting | sent
   const [mailHref, setMailHref] = useState('');
   const [lang, setLang] = useState('en');
@@ -491,7 +516,7 @@ function Rating({ client }) {
   async function handleSendToManager(e) {
     e.preventDefault();
 
-    const { subject, body } = EMAIL[lang](client.business_name, rating, feedback, phone);
+    const { subject, body } = EMAIL[lang](client.business_name, rating, feedback, { name, email: customerEmail.trim().toLowerCase(), phone });
     const href = 'mailto:' + client.manager_email
       + '?subject=' + encodeURIComponent(subject)
       + '&body=' + encodeURIComponent(body);
@@ -500,12 +525,22 @@ function Rating({ client }) {
     window.location.href = href;
     setStatus('sent');
 
-    const { error } = await supabase.from('private_reviews').insert({
+    const base = {
       client_id: client.id,
       stars: rating,
       feedback: feedback.slice(0, 1000),
       contact_phone: phone.trim().slice(0, 40) || null,
+    };
+    let { error } = await supabase.from('private_reviews').insert({
+      ...base,
+      contact_name: name.trim().slice(0, 120) || null,
+      contact_email: customerEmail.trim().toLowerCase().slice(0, 254) || null,
     });
+    if (error) {
+      // If the database has not been updated for the new fields yet, still
+      // save the feedback itself rather than losing it.
+      error = (await supabase.from('private_reviews').insert(base)).error;
+    }
     if (error) {
       // eslint-disable-next-line no-console
       console.error('Could not log private review:', error.message);
@@ -561,7 +596,13 @@ function Rating({ client }) {
           <textarea rows={4} maxLength={1000} value={feedback} className="cx-textarea"
             onChange={(e) => setFeedback(e.target.value)} style={textareaStyle}
             placeholder={t.placeholder} />
-          <input type="tel" maxLength={40} value={phone} className="cx-textarea"
+          <input type="text" maxLength={120} value={name} className="cx-textarea" autoComplete="name"
+            onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+            placeholder={t.namePlaceholder} />
+          <input type="email" maxLength={254} value={customerEmail} className="cx-textarea" autoComplete="email"
+            onChange={(e) => setCustomerEmail(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+            placeholder={t.emailPlaceholder} />
+          <input type="tel" maxLength={40} value={phone} className="cx-textarea" autoComplete="tel"
             onChange={(e) => setPhone(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
             placeholder={t.phonePlaceholder} />
           <p style={{ color: c.muted, fontSize: '0.78rem', margin: '0.4rem 0 0 0' }}>
