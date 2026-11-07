@@ -156,6 +156,18 @@ function displayName(cu) {
   return cu.full_name || cu.email || cu.phone || 'Unnamed';
 }
 
+// The database hands back at most 1000 rows per request, so a long list is read in pages.
+async function fetchAllRows(build, pageSize = 1000, cap = 30000) {
+  const rows = [];
+  for (let from = 0; from < cap; from += pageSize) {
+    const { data, error } = await build().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
 // Customer-typed text can end up in a spreadsheet. A cell that starts with =, @
 // (or a + / - followed by letters) can be run as a formula by Excel, so those
 // get a leading apostrophe. Plain phone numbers like +27 82 123 4567 are left alone.
@@ -1039,9 +1051,9 @@ function ReviewQueue({ client, customers, onUpdated, onClose, onBehalf }) {
 
   useEffect(() => {
     let alive = true;
-    supabase.from('customer_activities').select('customer_id, created_at')
+    fetchAllRows(() => supabase.from('customer_activities').select('customer_id, created_at')
       .eq('client_id', client.id).eq('kind', 'review_request')
-      .order('created_at', { ascending: false }).limit(5000)
+      .order('created_at', { ascending: false }).order('id'))
       .then(({ data, error }) => {
         if (!alive) return;
         const map = {};
@@ -1194,8 +1206,8 @@ function ReviewQueue({ client, customers, onUpdated, onClose, onBehalf }) {
   );
 }
 
-function CustomersTab({ client, customers, setCustomers, error, focusId, setFocusId, reqCount, onBehalf }) {
-  const [mode, setMode] = useState('list'); // list | add | import
+function CustomersTab({ client, customers, setCustomers, error, focusId, setFocusId, reqCount, onBehalf, startInQueue }) {
+  const [mode, setMode] = useState(startInQueue ? 'queue' : 'list'); // list | add | import | queue
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -1646,8 +1658,125 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
   );
 }
 
-function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail }) {
-  const [tab, setTab] = useState(client.business_type === 'service' ? 'add' : 'overview');
+const DAILY_TARGET = 20; // review requests per business per day, a sensible pace for WhatsApp
+
+// Everything the Cognix team needs at a glance: which businesses have people waiting to be
+// asked, who has been asked today, and what needs a reply - with one tap into each queue.
+function TeamHome({ clients, userEmail, onOpen }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    Promise.all([
+      fetchAllRows(() => supabase.from('customers')
+        .select('id, client_id, status, consent, phone, email, follow_up_on, last_contacted_at, created_at').order('id')),
+      fetchAllRows(() => supabase.from('customer_activities').select('customer_id, client_id, created_at')
+        .eq('kind', 'review_request').gte('created_at', since).order('id')),
+      fetchAllRows(() => supabase.from('private_reviews').select('id, client_id').eq('handled', false).order('id')),
+    ]).then(([cu, ac, fb]) => {
+      if (!alive) return;
+      const err = cu.error || ac.error || fb.error;
+      if (err) { setError(err.message); return; }
+      setData({ customers: cu.data, asks: ac.data, feedback: fb.data });
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const rows = !data ? [] : clients.map((cl) => {
+    const mine = data.customers.filter((x) => x.client_id === cl.id);
+    const asked = {};
+    let today = 0;
+    data.asks.forEach((a) => {
+      if (a.client_id !== cl.id) return;
+      if (!asked[a.customer_id] || a.created_at > asked[a.customer_id]) asked[a.customer_id] = a.created_at;
+      if (a.created_at >= startOfDay.toISOString()) today += 1;
+    });
+    return {
+      client: cl, total: mine.length, today,
+      ready: mine.filter((x) => canAsk(x, 'whatsapp', asked, cutoff)).length,
+      due: mine.filter(isDue).length,
+      feedback: data.feedback.filter((f) => f.client_id === cl.id).length,
+    };
+  }).sort((a, b) => b.ready - a.ready || a.client.business_name.localeCompare(b.client.business_name));
+
+  const sum = (k) => rows.reduce((n, r) => n + r[k], 0);
+  const q = search.trim().toLowerCase();
+  const shown = rows.filter((r) => !q || r.client.business_name.toLowerCase().includes(q));
+  const teamOf = clients.filter((cl) => cl.manager_email && userEmail
+    && cl.manager_email.toLowerCase() !== userEmail.toLowerCase()).length;
+
+  return (
+    <div>
+      <h1 style={{ fontSize: '1.7rem', margin: '1.5rem 0 0 0' }}>All businesses</h1>
+      {teamOf > 0 && (
+        <p style={{ color: c.amber, lineHeight: 1.55, margin: '0.6rem 0 0 0', fontSize: '0.9rem' }}>
+          You are working as the Cognix team in {teamOf} business{teamOf === 1 ? '' : 'es'}. Each business
+          can see this, and can remove your access at any time.
+        </p>
+      )}
+      <Card title="Today" subtitle={'A sensible pace is about ' + DAILY_TARGET + ' review requests per business per day.'}>
+        {error ? (
+          <p style={{ color: c.muted, margin: 0 }}>Could not load the overview. Please try again.</p>
+        ) : !data ? (
+          <p style={{ color: c.muted, margin: 0 }}>Loading...</p>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <Stat label="Businesses" value={clients.length} />
+            <Stat label="Ready to be asked" value={sum('ready')} hint="By WhatsApp, right now" />
+            <Stat label="Asked today" value={sum('today')} />
+            <Stat label="Follow-ups due" value={sum('due')} />
+            <Stat label="Feedback to handle" value={sum('feedback')} />
+          </div>
+        )}
+      </Card>
+      <Card title="Your businesses"
+        right={<input style={{ ...inputStyle, width: '14rem', padding: '0.5rem 0.7rem' }} value={search}
+          onChange={(e) => setSearch(e.target.value)} placeholder="Find a business" aria-label="Find a business" />}>
+        {data && shown.length === 0 && <p style={{ color: c.muted, margin: 0 }}>No business matches that.</p>}
+        {shown.map((r) => (
+          <div key={r.client.id} style={{ borderTop: '1px solid ' + c.line, padding: '1rem 0' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.8rem', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{r.client.business_name}</span>
+              <Pill text={r.client.business_type === 'service' ? 'Service' : 'Restaurant'} color={c.muted} />
+              {r.client.active === false && <Pill text="Paused" color={c.red} />}
+              {r.feedback > 0 && <Pill text={r.feedback + ' feedback to handle'} color={c.red} />}
+              {r.due > 0 && <Pill text={r.due + ' follow-up' + (r.due === 1 ? '' : 's') + ' due'} color={c.amber} />}
+            </div>
+            <div style={{ color: c.muted, fontSize: '0.88rem', margin: '0.4rem 0' }}>
+              {r.total} customer{r.total === 1 ? '' : 's'} | <b style={{ color: c.text }}>{r.ready}</b> ready to be asked
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 8rem', maxWidth: '14rem', height: '0.45rem', background: c.bg, borderRadius: '9999px', overflow: 'hidden' }}>
+                <div style={{ width: Math.min(100, Math.round((r.today * 100) / DAILY_TARGET)) + '%', height: '100%', background: c.green }} />
+              </div>
+              <span style={{ color: c.muted, fontSize: '0.82rem' }}>Asked today: {r.today} of {DAILY_TARGET}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.8rem' }}>
+              <button disabled={r.ready === 0} aria-label={'Start review requests for ' + r.client.business_name}
+                onClick={() => onOpen(r.client.id, { tab: 'customers', queue: true })}
+                style={{ ...primaryBtn, padding: '0.55rem 1rem', opacity: r.ready === 0 ? 0.45 : 1 }}>
+                Start review requests
+              </button>
+              <button aria-label={'Open ' + r.client.business_name} onClick={() => onOpen(r.client.id, null)}
+                style={{ ...ghostBtn, padding: '0.55rem 1rem' }}>
+                Open
+              </button>
+            </div>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail, jump }) {
+  const [tab, setTab] = useState(jump && jump.tab ? jump.tab : (client.business_type === 'service' ? 'add' : 'overview'));
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState('');
   const [reviews, setReviews] = useState(null);
@@ -1686,8 +1815,8 @@ function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail }) {
       setReviews(out.data || []);
     });
 
-    supabase.from('customers').select(CUSTOMER_COLS).eq('client_id', client.id)
-      .order('updated_at', { ascending: false }).limit(2000)
+    fetchAllRows(() => supabase.from('customers').select(CUSTOMER_COLS).eq('client_id', client.id)
+      .order('updated_at', { ascending: false }).order('id'))
       .then(({ data, error }) => {
         if (!alive) return;
         if (error) { setCustomersError(error.message); setCustomers([]); return; }
@@ -1738,6 +1867,9 @@ function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail }) {
           {client.active === false ? 'Paused' : 'Live'}
         </span>
         {clients.length > 1 && (
+          <button onClick={() => onSelect('')} style={smallBtn}>&larr; All businesses</button>
+        )}
+        {clients.length > 1 && (
           <select value={client.id} onChange={(e) => onSelect(e.target.value)} aria-label="Choose business"
             style={{ ...inputStyle, width: 'auto', padding: '0.5rem 0.7rem' }}>
             {clients.map((x) => <option key={x.id} value={x.id}>{x.business_name}</option>)}
@@ -1776,7 +1908,7 @@ function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail }) {
       ) : (
         <CustomersTab client={client} customers={customers} setCustomers={setCustomers}
           error={customersError} focusId={focusId} setFocusId={setFocusId} reqCount={reqCount}
-          onBehalf={onBehalf} />
+          onBehalf={onBehalf} startInQueue={!!(jump && jump.queue)} />
       )}
     </div>
   );
@@ -1787,6 +1919,7 @@ export default function Portal() {
   const [clients, setClients] = useState(null);
   const [selectedId, setSelectedId] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [jump, setJump] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -1819,7 +1952,7 @@ export default function Portal() {
         if (out.error) { setLoadError(out.error.message); setClients([]); return; }
         const list = out.data || [];
         setClients(list);
-        setSelectedId((cur) => cur || (list[0] ? list[0].id : ''));
+        setSelectedId((cur) => cur || (list.length === 1 ? list[0].id : ''));
       });
     return () => { alive = false; };
   }, [userId]);
@@ -1829,6 +1962,7 @@ export default function Portal() {
     setSession(null);
     setClients(null);
     setSelectedId('');
+    setJump(null);
   }
 
   function clientUpdated(patch) {
@@ -1862,11 +1996,20 @@ export default function Portal() {
     );
   }
 
-  const current = clients.find((x) => x.id === selectedId) || clients[0];
+  const current = clients.find((x) => x.id === selectedId) || (clients.length === 1 ? clients[0] : null);
+  if (!current) {
+    return (
+      <Frame onLogout={logout} email={email}>
+        <TeamHome clients={clients} userEmail={email}
+          onOpen={(id, target) => { setJump(target || null); setSelectedId(id); }} />
+      </Frame>
+    );
+  }
   return (
     <Frame onLogout={logout} email={email}>
       <Dashboard key={current.id} client={current} clients={clients}
-        onSelect={setSelectedId} onClientUpdated={clientUpdated} userEmail={email} />
+        onSelect={(id) => { setJump(null); setSelectedId(id); }} onClientUpdated={clientUpdated}
+        userEmail={email} jump={jump} />
     </Frame>
   );
 }
