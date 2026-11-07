@@ -13,7 +13,10 @@ import { supabase } from '../../lib/supabaseClient';
 // default. The customer can also leave a phone number if they are happy
 // to be called back about it.
 // ---------------------------------------------------------------------------
-export async function getServerSideProps({ params }) {
+export async function getServerSideProps({ params, query }) {
+  // A personal review link ends in ?c=<customer id>: it tells us exactly who tapped it.
+  const cid = String((query && query.c) || '');
+  const customerId = /^[0-9a-f-]{36}$/i.test(cid) ? cid : null;
   const slug = String(params.slug || '').toLowerCase();
   if (!slug) return { props: { state: 'missing' } };
 
@@ -49,7 +52,7 @@ export async function getServerSideProps({ params }) {
       return { props: { state: 'incomplete' } };
     }
 
-    return { props: { state: 'ok', client: data } };
+    return { props: { state: 'ok', client: data, customerId } };
   } catch (err) {
     return { props: { state: 'error' } };
   }
@@ -81,10 +84,26 @@ const STR = {
     experienceHeading: 'How was your experience?',
     experienceSub: 'Let the manager know what happened, so they can make it right.',
     placeholder: 'What went wrong?',
-    phonePlaceholder: 'Your phone number (optional)',
-    namePlaceholder: 'Your name (optional)',
-    emailPlaceholder: 'Your email (optional)',
-    phoneHelp: 'Only used so the manager can follow up on your feedback.',
+    phonePlaceholder: "Your phone number",
+    namePlaceholder: "Your name",
+    emailPlaceholder: "Your email",
+    phoneHelp: "We'll use your details to put things right, and may send you the occasional update. Reply STOP any time to opt out.",
+    googleBtn: 'Leave a Google review',
+    stayHeading: 'Stay in touch',
+    stayBody: (b) => `Want to hear from ${b}? Leave your details - it's optional.`,
+    consentLabel: (b) => `I agree that ${b} may contact me. I can ask them to stop at any time.`,
+    saveDetailsBtn: 'Save my details',
+    savedMsg: 'Thank you - your details were saved.',
+    needContact: 'Please add an email address or a phone number.',
+    needConsent: 'Please tick the box to agree.',
+    saveFailed: 'Sorry, we could not save that. You can still leave your review.',
+    thanksReview: 'Thank you for your review!',
+    offerIntro: (b, offer) => offer ? `Here's a thank-you from ${b}: ${offer}. Leave your details and we'll send your code.` : `Want to hear from ${b}? Leave your details to stay in the loop.`,
+    claimBtn: 'Get my reward',
+    codeHeading: 'Your reward',
+    codeHelp: 'Show this screen to a team member on your next visit.',
+    codeLabel: 'Your code',
+    reopenGoogle: "Didn't see Google? Open it again",
     sendBtn: 'Send to the manager',
     sentHeading: 'Your message is ready to send',
     sentSub: (b) => `We've opened your email app with a message already written for ${b} `
@@ -105,10 +124,26 @@ const STR = {
     experienceHeading: 'Hoe was jou ervaring?',
     experienceSub: 'Laat weet die bestuurder wat gebeur het, sodat hulle dit kan regmaak.',
     placeholder: 'Wat het verkeerd gegaan?',
-    phonePlaceholder: 'Jou telefoonnommer (opsioneel)',
-    namePlaceholder: 'Jou naam (opsioneel)',
-    emailPlaceholder: 'Jou e-pos (opsioneel)',
-    phoneHelp: 'Word net gebruik sodat die bestuurder op jou terugvoer kan opvolg.',
+    phonePlaceholder: "Jou telefoonnommer",
+    namePlaceholder: "Jou naam",
+    emailPlaceholder: "Jou e-pos",
+    phoneHelp: "Ons gebruik jou besonderhede om dinge reg te stel en kan jou af en toe 'n opdatering stuur. Antwoord STOP om enige tyd uit te tree.",
+    googleBtn: "Los 'n Google-resensie",
+    stayHeading: 'Bly in kontak',
+    stayBody: (b) => `Wil jy van ${b} hoor? Los jou besonderhede - dit is opsioneel.`,
+    consentLabel: (b) => `Ek stem in dat ${b} my mag kontak. Ek kan hulle enige tyd vra om op te hou.`,
+    saveDetailsBtn: 'Stoor my besonderhede',
+    savedMsg: 'Dankie - jou besonderhede is gestoor.',
+    needContact: "Voeg asseblief 'n e-posadres of foonnommer by.",
+    needConsent: 'Merk asseblief die blokkie om in te stem.',
+    saveFailed: 'Jammer, ons kon dit nie stoor nie. Jy kan steeds jou resensie los.',
+    thanksReview: 'Dankie vir jou resensie!',
+    offerIntro: (b, offer) => offer ? `Hier is 'n dankie van ${b}: ${offer}. Los jou besonderhede en ons stuur jou kode.` : `Wil jy van ${b} hoor? Los jou besonderhede om op hoogte te bly.`,
+    claimBtn: 'Kry my beloning',
+    codeHeading: 'Jou beloning',
+    codeHelp: "Wys hierdie skerm aan 'n spanlid met jou volgende besoek.",
+    codeLabel: 'Jou kode',
+    reopenGoogle: 'Nie Google gesien nie? Maak dit weer oop',
     sendBtn: 'Stuur aan die bestuurder',
     sentHeading: 'Jou boodskap is gereed om te stuur',
     sentSub: (b) => `Ons het jou e-posprogram oopgemaak met 'n boodskap wat reeds vir ${b} `
@@ -129,10 +164,26 @@ const STR = {
     experienceHeading: 'Kwakunjani ukuhlangenwe nakho kwakho?',
     experienceSub: 'Yazisa umphathi ukuthi kwenzekeni, ukuze bakulungise.',
     placeholder: 'Yini eyonakele?',
-    phonePlaceholder: 'Inombolo yakho yocingo (akuphoqelekile)',
-    namePlaceholder: 'Igama lakho (akuphoqelekile)',
-    emailPlaceholder: 'I-imeyili yakho (akuphoqelekile)',
-    phoneHelp: 'Isetshenziselwa kuphela ukuze umphathi alandelele impendulo yakho.',
+    phonePlaceholder: "Inombolo yakho yocingo",
+    namePlaceholder: "Igama lakho",
+    emailPlaceholder: "I-imeyili yakho",
+    phoneHelp: "Sizosebenzisa imininingwane yakho ukulungisa izinto futhi singakuthumelela izibuyekezo ngezikhathi ezithile. Phendula ngo-STOP noma nini ukuze uyeke.",
+    googleBtn: 'Shiya ukubuyekezwa ku-Google',
+    stayHeading: 'Hlala uxhumene nathi',
+    stayBody: (b) => `Ingabe ufuna ukuzwa kwa-${b}? Shiya imininingwane yakho - akuphoqelekile.`,
+    consentLabel: (b) => `Ngiyavuma ukuthi i-${b} ingangithinta. Ngingabacela ukuthi bayeke noma nini.`,
+    saveDetailsBtn: 'Gcina imininingwane yami',
+    savedMsg: 'Siyabonga - imininingwane yakho igciniwe.',
+    needContact: 'Sicela wengeze i-imeyili noma inombolo yocingo.',
+    needConsent: 'Sicela ushaye uphawu ebhokisini ukuze uvume.',
+    saveFailed: 'Uxolo, asikwazanga ukukugcina lokho. Usengakwazi ukushiya ukubuyekezwa kwakho.',
+    thanksReview: 'Siyabonga ngokubuyekeza kwakho!',
+    offerIntro: (b, offer) => offer ? `Nasi isibonelo sokubonga esivela ku-${b}: ${offer}. Shiya imininingwane yakho sizokuthumelela ikhodi yakho.` : `Ingabe ufuna ukuzwa kwa-${b}? Shiya imininingwane yakho.`,
+    claimBtn: 'Thola umvuzo wami',
+    codeHeading: 'Umvuzo wakho',
+    codeHelp: 'Khombisa lesi sikrini ilungu leqembu uma ubuya ngokuzayo.',
+    codeLabel: 'Ikhodi yakho',
+    reopenGoogle: 'Awuboni i-Google? Yivule futhi',
     sendBtn: 'Thumela kumphathi',
     sentHeading: 'Umlayezo wakho usulungele ukuthunyelwa',
     sentSub: (b) => `Sivule uhlelo lwakho lwe-imeyili ngomlayezo osubhalelwe i-${b} `
@@ -153,10 +204,26 @@ const STR = {
     experienceHeading: 'Maitemogelo a gago e be a bjang?',
     experienceSub: 'Tsebiša molaodi seo se diregilego, gore ba se lokiše.',
     placeholder: 'Ke eng seo se sa fetago gabotse?',
-    phonePlaceholder: 'Nomoro ya gago ya founu (ga e gapeletšwe)',
-    namePlaceholder: 'Leina la gago (ga le gapeletšwe)',
-    emailPlaceholder: 'Emeile ya gago (ga e gapeletšwe)',
-    phoneHelp: 'E dirišetšwa feela gore molaodi a latele maikutlo a gago.',
+    phonePlaceholder: "Nomoro ya gago ya founu",
+    namePlaceholder: "Leina la gago",
+    emailPlaceholder: "Emeile ya gago",
+    phoneHelp: "Re tla dirišetša dintlha tša gago go lokiša dilo gomme re ka go romela ditsebišo ka nako ye nngwe. Araba ka STOP nako efe goba efe go ema.",
+    googleBtn: 'Tlogela tlhahlobo ya Google',
+    stayHeading: 'Dula o ikgokaganya le rena',
+    stayBody: (b) => `O nyaka go kwa go tšwa go ${b}? Tlogela dintlha tša gago - ga di gapeletšwe.`,
+    consentLabel: (b) => `Ke dumela gore ${b} e kgone go ikgokaganya le nna. Nka ba kgopela go ema nako efe goba efe.`,
+    saveDetailsBtn: 'Boloka dintlha tša ka',
+    savedMsg: 'Re a leboga - dintlha tša gago di bolokilwe.',
+    needContact: 'Hle oketše aterese ya emeile goba nomoro ya founu.',
+    needConsent: 'Hle tšhaya lepokisana gore o dumele.',
+    saveFailed: 'Hle ntshwarele, ga se ra kgona go e boloka. O sa kgona go tlogela tlhahlobo ya gago.',
+    thanksReview: 'Re a leboga ka tlhahlobo ya gago!',
+    offerIntro: (b, offer) => offer ? `Ke ngwakwana wa go leboga go tšwa go ${b}: ${offer}. Tlogela dintlha tša gago re tla go romela khoutu ya gago.` : `O nyaka go kwa go tšwa go ${b}? Tlogela dintlha tša gago.`,
+    claimBtn: 'Hwetša moputso wa ka',
+    codeHeading: 'Moputso wa gago',
+    codeHelp: 'Bontšha sekirini se go leloko la sehlopha ge o etela gape.',
+    codeLabel: 'Khoutu ya gago',
+    reopenGoogle: 'Ga o bone Google? E bule gape',
     sendBtn: 'Romela go molaodi',
     sentHeading: 'Molaetša wa gago o loketše go romelwa',
     sentSub: (b) => `Re butše app ya gago ya email ka molaetša o šetšego o ngwadilwe bakeng sa ${b} `
@@ -177,10 +244,26 @@ const STR = {
     experienceHeading: 'Vhutsimbi hau ho vha hu tini?',
     experienceSub: 'Vhudzani mulanguli zwe zwa itea, uri vha zwi lugise.',
     placeholder: 'Ndi mini tsho khakhelaho?',
-    phonePlaceholder: 'Nomboro yau ya luṱingo (a si vhukuma)',
-    namePlaceholder: 'Dzina lau (a si vhukuma)',
-    emailPlaceholder: 'Imeili yau (a si vhukuma)',
-    phoneHelp: 'I shumiswa fhedzi uri mulanguli a tevhedze mafhungo au.',
+    phonePlaceholder: "Nomboro yau ya luṱingo",
+    namePlaceholder: "Dzina lau",
+    emailPlaceholder: "Imeili yau",
+    phoneHelp: "Ri ḓo shumisa mafhungo anu u lugisa zwithu nahone ri nga ni rumela mafhungo nga tshifhinga tshiṅwe. Fhindulani nga STOP tshifhinga tshiṅwe na tshiṅwe u litsha.",
+    googleBtn: 'Siala tsedzuluso kha Google',
+    stayHeading: 'Dzulani ni tshi vhofha',
+    stayBody: (b) => `Ni khou ṱoḓa u pfa u bva kha ${b}? Siani mafhungo anu - a si vhukuma.`,
+    consentLabel: (b) => `Ndi a tenda uri ${b} i nga dzhenela u vhofha na nṋe. Ndi nga i humbela u litsha tshifhinga tshiṅwe na tshiṅwe.`,
+    saveDetailsBtn: 'Vhulungani mafhungo anga',
+    savedMsg: 'Ndi a livhuwa - mafhungo anu o vhulungwa.',
+    needContact: 'Ri humbela ni engedze imeili kana nomboro ya luṱingo.',
+    needConsent: 'Ri humbela ni ṱhaphudze bogisi u tenda.',
+    saveFailed: 'Ri khou humbela pfarelo, a ro ngo kona u i vhulunga. Ni a kona u siala tsedzuluso yanu.',
+    thanksReview: 'Ndi a livhuwa nga tsedzuluso yanu!',
+    offerIntro: (b, offer) => offer ? `Hu na ngaho ya u livhuwa i bvaho kha ${b}: ${offer}. Siani mafhungo anu ri ni rumele khodi yanu.` : `Ni khou ṱoḓa u pfa u bva kha ${b}? Siani mafhungo anu.`,
+    claimBtn: 'Wana tshileme tshanga',
+    codeHeading: 'Tshileme tshanu',
+    codeHelp: 'Sumbedzani iyi sikirini kha mulwane wa tshigwada musi ni tshi vhuya hafhu.',
+    codeLabel: 'Khodi yanu',
+    reopenGoogle: 'A ni vhoni Google? Ivuleni hafhu',
     sendBtn: 'Rumela kha mulanguli',
     sentHeading: 'Mulaedza wau wo lugela u rumelwa',
     sentSub: (b) => `Ro vula app yau ya imeili na mulaedza wo no ṅwalwa u itela ${b} `
@@ -295,7 +378,7 @@ const EMAIL = {
 };
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_ACCENT = '#1f6fff';
+const DEFAULT_ACCENT = '#0f766e';
 
 // Blends a hex colour toward white by `amount` (0 to 1), for a light end
 // of a gradient that always matches whatever colour a client is using.
@@ -309,22 +392,56 @@ function lighten(hex, amount) {
   return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
 }
 
+// Light and dark mode: follows the phone's setting, with a small switch to override it.
+const THEME_DARK = '--bg:#0d0f12;--surface:#15181d;--surface2:#1d222a;--line:#2a303a;--text:#f2f4f7;--muted:#9aa3b0;--faint:#6b7480;--star-off:#3a414c;--danger:#fca5a5;--link:#7dd3c8;--shadow:0 24px 60px rgba(0,0,0,.45);--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--ok-bg:#0f3d2e;--bad-bg:#4a1d1d;';
+const THEME_LIGHT = '--bg:#f5f6f8;--surface:#ffffff;--surface2:#eef0f3;--line:#dde1e7;--text:#12151a;--muted:#566070;--faint:#8a93a0;--star-off:#d3d8df;--danger:#b42318;--link:#0f766e;--shadow:0 24px 60px rgba(16,24,40,.12);--ok:#047857;--warn:#b45309;--bad:#b91c1c;--ok-bg:#d1fae5;--bad-bg:#fee2e2;';
+const THEME_CSS = ':root{--accent:#0f766e;' + THEME_DARK + '}'
+  + '@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){' + THEME_LIGHT + '}}'
+  + ':root[data-theme="light"]{' + THEME_LIGHT + '}:root[data-theme="dark"]{' + THEME_DARK + '}'
+  + 'html,body{margin:0;background:var(--bg)}';
+
+function ThemeToggle() {
+  const [mode, setMode] = useState('dark');
+  useEffect(() => {
+    let saved = '';
+    try { saved = window.localStorage.getItem('cx-theme') || ''; } catch (e) { /* ignore */ }
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    setMode(saved || (prefersLight ? 'light' : 'dark'));
+  }, []);
+  function flip() {
+    const next = mode === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { window.localStorage.setItem('cx-theme', next); } catch (e) { /* ignore */ }
+    setMode(next);
+  }
+  return (
+    <button type="button" onClick={flip}
+      aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+      style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', background: 'transparent',
+               border: '1px solid var(--line)', color: 'var(--muted)', borderRadius: '9999px',
+               padding: '0.2rem 0.65rem', fontSize: '0.72rem', cursor: 'pointer' }}>
+      {mode === 'light' ? 'Dark' : 'Light'}
+    </button>
+  );
+}
+
 const c = {
-  bg: '#0f172a', surface: '#131f38', line: '#22335a', text: '#f1f5f9',
-  muted: '#a5b3cb', star: '#fbbf24',
+  bg: 'var(--bg)', surface: 'var(--surface)', line: 'var(--line)', text: 'var(--text)',
+  muted: 'var(--muted)', star: '#f5b301',
 };
 const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 const pageStyle = {
   minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'radial-gradient(60rem 30rem at 50% -10%, rgba(31,111,255,0.16), rgba(15,23,42,0) 65%), '
+  background: 'radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 65%), '
     + c.bg,
   color: c.text, fontFamily: sans, padding: '1.5rem',
 };
 const cardStyle = {
   width: '100%', maxWidth: '26rem', background: c.surface, border: '1px solid ' + c.line,
   borderRadius: '1.1rem', padding: '2.25rem 1.75rem', boxSizing: 'border-box',
-  boxShadow: '0 24px 60px rgba(0, 0, 0, 0.35)', position: 'relative', overflow: 'hidden',
+  boxShadow: 'var(--shadow)', position: 'relative', overflow: 'hidden',
 };
 const headingStyle = { fontSize: '1.55rem', fontWeight: 800, lineHeight: 1.28, margin: '0 0 0.5rem 0' };
 const mutedStyle = { color: c.muted, lineHeight: 1.65, margin: '0 0 1.4rem 0', fontSize: '0.98rem' };
@@ -337,12 +454,12 @@ const inputStyle = { ...textareaStyle, resize: 'none' };
 
 function Shell({ title, accentColor, footerText, children }) {
   return (
-    <div style={pageStyle}>
+    <div style={{ ...pageStyle, '--accent': accentColor }}>
       <Head>
         <title>{title}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style dangerouslySetInnerHTML={{ __html: `
-          body{margin:0;background:#0f172a}
+          ${THEME_CSS}
           @keyframes cxFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
           @keyframes cxSpin{to{transform:rotate(360deg)}}
           @keyframes cxPop{from{transform:scale(0.6);opacity:0}to{transform:scale(1);opacity:1}}
@@ -361,8 +478,9 @@ function Shell({ title, accentColor, footerText, children }) {
       <div style={cardStyle}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
           background: `linear-gradient(90deg, ${accentColor}, ${lighten(accentColor, 0.4)})` }} />
+        <ThemeToggle />
         {children}
-        <p style={{ color: '#5b6b8c', fontSize: '0.72rem', textAlign: 'center',
+        <p style={{ color: 'var(--faint)', fontSize: '0.72rem', textAlign: 'center',
           letterSpacing: '0.04em', margin: '1.75rem 0 0 0' }}>
           {footerText || STR.en.poweredBy}
         </p>
@@ -378,7 +496,7 @@ function StarRow({ value, onRate }) {
         <button key={n} onClick={() => onRate(n)} aria-label={n + ' out of 5 stars'}
           className="cx-star"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.1rem',
-                   fontSize: '2.75rem', lineHeight: 1, color: n <= value ? c.star : '#3a4a68' }}>
+                   fontSize: '2.75rem', lineHeight: 1, color: n <= value ? c.star : 'var(--star-off)' }}>
           &#9733;
         </button>
       ))}
@@ -395,7 +513,7 @@ function LangToggle({ lang, onChange, accentColor }) {
           style={{
             border: '1px solid ' + (lang === code ? accentColor : c.line),
             background: lang === code ? accentColor + '26' : 'transparent',
-            color: lang === code ? '#fff' : c.muted,
+            color: lang === code ? c.text : c.muted,
             borderRadius: '9999px', padding: '0.3rem 0.7rem', fontSize: '0.76rem',
             fontWeight: 700, cursor: 'pointer', letterSpacing: '0.03em',
           }}>
@@ -449,15 +567,33 @@ export default function RouterPage(props) {
     );
   }
 
-  return <Rating client={props.client} />;
+  return <Rating client={props.client} customerId={props.customerId || null} />;
 }
 
-function Rating({ client }) {
+// A short code a customer can show a team member to claim their reward. It avoids
+// letters and digits that are easy to mix up (0/O, 1/I/L).
+function makeCode() {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint32Array(6);
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 6; i++) bytes[i] = Math.floor(Math.random() * 4294967295);
+  }
+  let out = '';
+  for (let i = 0; i < 6; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+function Rating({ client, customerId }) {
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [claim, setClaim] = useState('');
+  const [detailsState, setDetailsState] = useState('idle'); // idle | saving | saved
+  const [detailsMsg, setDetailsMsg] = useState('');
   const [status, setStatus] = useState('idle'); // idle | spinning | redirecting | sent
   const [mailHref, setMailHref] = useState('');
   const [lang, setLang] = useState('en');
@@ -467,14 +603,19 @@ function Rating({ client }) {
     ? client.accent_color
     : DEFAULT_ACCENT;
   const footerText = (client.footer_text && client.footer_text.trim()) || t.poweredBy;
+  const offer = (client.lead_offer || '').trim();
+  const isService = client.business_type === 'service';
 
   // Counts for the client portal. Fire-and-forget: a failure here never
   // affects the customer.
   function logEvent(type) {
-    supabase.from('scans_log').insert({ client_id: client.id, interaction_type: type })
+    const base = { client_id: client.id, interaction_type: type };
+    supabase.from('scans_log').insert(customerId ? { ...base, customer_id: customerId } : base)
       .then(({ error }) => {
-        // eslint-disable-next-line no-console
-        if (error) console.error('Could not log event:', error.message);
+        if (error && customerId) {
+          // older database: still count the event, just without the customer
+          supabase.from('scans_log').insert(base).then(() => {});
+        }
       });
   }
 
@@ -489,28 +630,83 @@ function Rating({ client }) {
     textDecoration: 'none', boxShadow: `0 10px 24px ${accentColor}61`,
   };
   const secondaryButtonStyle = {
-    ...buttonStyle, background: '#1c2b4a', boxShadow: 'none', border: '1px solid ' + c.line,
+    ...buttonStyle, background: 'var(--surface2)', boxShadow: 'none', border: '1px solid ' + c.line,
   };
   const kickerStyle = {
-    color: lighten(accentColor, 0.25), fontSize: '0.78rem', fontWeight: 700,
+    color: `color-mix(in srgb, ${accentColor} 62%, var(--text))`, fontSize: '0.78rem', fontWeight: 700,
     letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 0.6rem 0',
   };
 
+  // A short, deliberate pause with a spinner then a checkmark, instead of
+  // navigating away instantly - so the "thank you" actually gets seen.
+  function goToGoogle(skipLog) {
+    if (!skipLog) logEvent('google_redirect');
+    setStatus('spinning');
+    window.setTimeout(() => {
+      setStatus('redirecting');
+      window.setTimeout(() => {
+        window.location.href = client.google_review_url;
+      }, 260);
+    }, 480);
+  }
+
   function handleRating(n) {
     setRating(n);
-    logEvent(n >= 4 ? 'google_redirect' : 'private_intercept');
     if (n >= 4) {
-      // A short, deliberate pause with a spinner then a checkmark, instead
-      // of navigating away instantly - so the "thank you" actually gets
-      // seen. Roughly three quarters of a second in total.
-      setStatus('spinning');
-      window.setTimeout(() => {
-        setStatus('redirecting');
-        window.setTimeout(() => {
-          window.location.href = client.google_review_url;
-        }, 260);
-      }, 480);
+      // Happy customers go straight to Google - unless this business has chosen
+      // to offer them an optional "stay in touch" form first.
+      if (!isService && client.collect_happy_details) {
+        // A review matters more than a lead: open Google straight away, in a new tab.
+        // This page stays open behind it with a thank-you offer for when they come back.
+        logEvent('google_redirect');
+        const win = window.open(client.google_review_url, '_blank');
+        if (win) {
+          try { win.opener = null; } catch (e) { /* ignore */ }
+          setStatus('reward');
+        } else {
+          goToGoogle(true); // the browser blocked the new tab: go to Google in this one
+        }
+      } else {
+        goToGoogle();
+      }
+    } else {
+      logEvent('private_intercept');
     }
+  }
+
+  async function saveDetails(e) {
+    e.preventDefault();
+    setDetailsMsg('');
+    const em = customerEmail.trim().toLowerCase();
+    const ph = phone.trim();
+    if (!em && !ph) { setDetailsMsg(t.needContact); return; }
+    setDetailsState('saving');
+    const row = {
+      client_id: client.id,
+      stars: rating,
+      contact_name: name.trim().slice(0, 120) || null,
+      contact_email: em.slice(0, 254) || null,
+      contact_phone: ph.slice(0, 40) || null,
+      consent_given: true,
+    };
+    let code = offer ? makeCode() : null;
+    let res = await supabase.from('contact_submissions').insert({ ...row, claim_code: code });
+    if (res.error && code) {
+      code = makeCode(); // a clash with another code is very unlikely, but try once more
+      res = await supabase.from('contact_submissions').insert({ ...row, claim_code: code });
+    }
+    if (res.error) {
+      // older database without the code column: save the details without a code
+      code = null;
+      res = await supabase.from('contact_submissions').insert(row);
+    }
+    if (res.error) {
+      setDetailsState('idle');
+      setDetailsMsg(t.saveFailed);
+      return;
+    }
+    setClaim(code || '');
+    setDetailsState('saved');
   }
 
   async function handleSendToManager(e) {
@@ -535,6 +731,7 @@ function Rating({ client }) {
       ...base,
       contact_name: name.trim().slice(0, 120) || null,
       contact_email: customerEmail.trim().toLowerCase().slice(0, 254) || null,
+      ...(customerId ? { customer_id: customerId } : {}),
     });
     if (error) {
       // If the database has not been updated for the new fields yet, still
@@ -562,6 +759,55 @@ function Rating({ client }) {
           <h1 style={headingStyle}>{t.visitHeading(client.business_name)}</h1>
           <p style={mutedStyle}>{t.tapStar}</p>
           <StarRow value={rating} onRate={handleRating} />
+        </div>
+      )}
+
+      {status === 'reward' && (
+        <div className="cx-fade">
+          <p style={kickerStyle}>{t.kickerThanks}</p>
+          <h1 style={headingStyle}>{t.thanksReview}</h1>
+          {detailsState === 'saved' ? (
+            claim ? (
+              <div>
+                <p style={{ ...mutedStyle, marginBottom: '0.7rem' }}>{t.codeHeading}: {offer}</p>
+                <div style={{ border: '2px dashed ' + c.line, borderRadius: '0.8rem', padding: '1.1rem',
+                              textAlign: 'center', marginBottom: '0.9rem' }}>
+                  <div style={{ color: c.muted, fontSize: '0.8rem' }}>{t.codeLabel}</div>
+                  <div style={{ fontSize: '2.1rem', fontWeight: 800, letterSpacing: '0.2em' }}>{claim}</div>
+                </div>
+                <p style={mutedStyle}>{t.codeHelp}</p>
+              </div>
+            ) : (
+              <p style={{ ...mutedStyle, color: c.text }}>{t.savedMsg}</p>
+            )
+          ) : (
+            <form onSubmit={saveDetails}>
+              <p style={{ ...mutedStyle, marginBottom: '0.9rem' }}>{t.offerIntro(client.business_name, offer)}</p>
+              <input type="text" maxLength={120} value={name} className="cx-textarea" autoComplete="name"
+                onChange={(e) => setName(e.target.value)} style={inputStyle}
+                placeholder={t.namePlaceholder} />
+              <input type="email" maxLength={254} value={customerEmail} className="cx-textarea" autoComplete="email"
+                onChange={(e) => setCustomerEmail(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+                placeholder={t.emailPlaceholder} />
+              <input type="tel" maxLength={40} value={phone} className="cx-textarea" autoComplete="tel"
+                onChange={(e) => setPhone(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+                placeholder={t.phonePlaceholder} />
+              <button type="submit" className="cx-btn" disabled={detailsState === 'saving'}
+                style={{ ...buttonStyle, marginTop: '1rem' }}>
+                {offer ? t.claimBtn : t.saveDetailsBtn}
+              </button>
+              <p style={{ color: c.muted, fontSize: '0.78rem', lineHeight: 1.5, margin: '0.6rem 0 0 0' }}>{t.phoneHelp}</p>
+              {detailsMsg && (
+                <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: '0.7rem 0 0 0' }}>
+                  {detailsMsg}
+                </p>
+              )}
+            </form>
+          )}
+          <a href={client.google_review_url} target="_blank" rel="noreferrer"
+            style={{ display: 'inline-block', marginTop: '1.25rem', color: c.muted, fontSize: '0.85rem' }}>
+            {t.reopenGoogle}
+          </a>
         </div>
       )}
 
@@ -596,12 +842,16 @@ function Rating({ client }) {
           <textarea rows={4} maxLength={1000} value={feedback} className="cx-textarea"
             onChange={(e) => setFeedback(e.target.value)} style={textareaStyle}
             placeholder={t.placeholder} />
-          <input type="text" maxLength={120} value={name} className="cx-textarea" autoComplete="name"
-            onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
-            placeholder={t.namePlaceholder} />
-          <input type="email" maxLength={254} value={customerEmail} className="cx-textarea" autoComplete="email"
-            onChange={(e) => setCustomerEmail(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
-            placeholder={t.emailPlaceholder} />
+          {!isService && (
+            <>
+              <input type="text" maxLength={120} value={name} className="cx-textarea" autoComplete="name"
+                onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+                placeholder={t.namePlaceholder} />
+              <input type="email" maxLength={254} value={customerEmail} className="cx-textarea" autoComplete="email"
+                onChange={(e) => setCustomerEmail(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
+                placeholder={t.emailPlaceholder} />
+            </>
+          )}
           <input type="tel" maxLength={40} value={phone} className="cx-textarea" autoComplete="tel"
             onChange={(e) => setPhone(e.target.value)} style={{ ...inputStyle, marginTop: '0.7rem' }}
             placeholder={t.phonePlaceholder} />
