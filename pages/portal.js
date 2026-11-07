@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 
@@ -16,10 +16,43 @@ const SITE = 'https://cognix.co.za';
 const SUPPORT_WHATSAPP = '27622393280';
 const SUPPORT_EMAIL = 'lekalakalamashilo23@gmail.com';
 
+// Light and dark mode: follows the device's setting, with a small switch to override it.
+const THEME_DARK = '--bg:#0d0f12;--surface:#15181d;--surface2:#1d222a;--line:#2a303a;--text:#f2f4f7;--muted:#9aa3b0;--faint:#6b7480;--star-off:#3a414c;--danger:#fca5a5;--link:#7dd3c8;--shadow:0 24px 60px rgba(0,0,0,.45);--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--ok-bg:#0f3d2e;--bad-bg:#4a1d1d;';
+const THEME_LIGHT = '--bg:#f5f6f8;--surface:#ffffff;--surface2:#eef0f3;--line:#dde1e7;--text:#12151a;--muted:#566070;--faint:#8a93a0;--star-off:#d3d8df;--danger:#b42318;--link:#0f766e;--shadow:0 24px 60px rgba(16,24,40,.12);--ok:#047857;--warn:#b45309;--bad:#b91c1c;--ok-bg:#d1fae5;--bad-bg:#fee2e2;';
+const THEME_CSS = ':root{--accent:#0f766e;' + THEME_DARK + '}'
+  + '@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){' + THEME_LIGHT + '}}'
+  + ':root[data-theme="light"]{' + THEME_LIGHT + '}:root[data-theme="dark"]{' + THEME_DARK + '}'
+  + 'html,body{margin:0;background:var(--bg)}';
+
 const c = {
-  bg: '#0f172a', surface: '#131f38', line: '#22335a', text: '#f1f5f9', muted: '#a5b3cb',
-  electric: '#1f6fff', electricText: '#4db2ff', green: '#34d399', amber: '#fbbf24', red: '#f87171',
+  bg: 'var(--bg)', surface: 'var(--surface)', line: 'var(--line)', text: 'var(--text)', muted: 'var(--muted)',
+  electric: 'var(--accent)', electricText: 'var(--link)', green: 'var(--ok)', amber: 'var(--warn)', red: 'var(--bad)',
 };
+
+function ThemeToggle() {
+  const [mode, setMode] = useState('dark');
+  useEffect(() => {
+    let saved = '';
+    try { saved = window.localStorage.getItem('cx-theme') || ''; } catch (e) { /* ignore */ }
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    setMode(saved || (prefersLight ? 'light' : 'dark'));
+  }, []);
+  function flip() {
+    const next = mode === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { window.localStorage.setItem('cx-theme', next); } catch (e) { /* ignore */ }
+    setMode(next);
+  }
+  return (
+    <button type="button" onClick={flip}
+      aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+      style={{ background: 'transparent', border: '1px solid var(--line)', color: 'var(--muted)',
+               borderRadius: '9999px', padding: '0.35rem 0.85rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+      {mode === 'light' ? 'Dark mode' : 'Light mode'}
+    </button>
+  );
+}
 const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 const inputStyle = {
@@ -50,12 +83,14 @@ const STATUS_COLOR = {
 const CONSENT = {
   unknown: 'Not recorded', follow_up_only: 'Follow-up only',
   marketing_ok: 'Agreed to hear from you', opted_out: "Don't contact",
+  notified: 'Told how we use their details',
 };
 const CONSENT_HELP = {
   unknown: 'We have not recorded whether this person agreed to be contacted.',
   follow_up_only: 'They shared their details so you could follow up on their feedback.',
   marketing_ok: 'They agreed to hear from your business.',
   opted_out: 'They asked not to be contacted. Review requests are switched off for them.',
+  notified: 'They were told how their details are used, and how to opt out.',
 };
 const KIND = {
   note: 'Note', review_request: 'Review request', status_change: 'Status',
@@ -63,6 +98,44 @@ const KIND = {
 };
 const CUSTOMER_COLS = 'id, full_name, email, phone, notes, tags, source, status, consent, '
   + 'consent_note, consent_at, follow_up_on, last_contacted_at, created_at, updated_at';
+
+// The message used to ask a customer for a review. When the Cognix team sends it for
+// a business, it says so, so the customer knows who is writing to them.
+function requestMessage(client, cu, onBehalf) {
+  const first = (cu.full_name || '').trim().split(/\s+/)[0];
+  const hello = first ? 'Hi ' + first + ',' : 'Hi,';
+  // A personal link: what this customer does with it shows on their own history.
+  const link = client.slug ? SITE + '/r/' + client.slug + '?c=' + cu.id : '';
+  const lead = onBehalf
+    ? ' this is Cognix, sending a quick message on behalf of ' + client.business_name + '. Thank you for visiting! '
+    : ' thank you for visiting ' + client.business_name + '. ';
+  return hello + lead + "We'd love to hear how it went - it only takes a few seconds: " + link
+    + " Reply STOP and we won't message you again.";
+}
+
+// Who may be asked for a review right now, on a given channel.
+function canAsk(cu, channel, asked, cutoff) {
+  if (cu.consent === 'opted_out' || cu.consent === 'follow_up_only') return false;
+  if (cu.status === 'complaint' || cu.status === 'lost' || cu.status === 'reviewed') return false;
+  const last = asked[cu.id] || (cu.status === 'review_requested' ? cu.last_contacted_at : null);
+  if (last && new Date(last).getTime() > cutoff) return false;
+  if (channel === 'email') return isEmail(cu.email);
+  const n = normPhone(cu.phone);
+  return !!n && n.length >= 11 && n.length <= 15;
+}
+
+async function recordReviewRequest(client, customer, channel) {
+  const label = { whatsapp: 'WhatsApp', sms: 'SMS', email: 'email' }[channel];
+  await supabase.from('customer_activities').insert({
+    customer_id: customer.id, client_id: client.id, kind: 'review_request', channel,
+    body: 'Review request opened via ' + label,
+  });
+  const patch = { last_contacted_at: new Date().toISOString() };
+  if (customer.status === 'new' || customer.status === 'contacted') patch.status = 'review_requested';
+  const { data, error } = await supabase.from('customers')
+    .update(patch).eq('id', customer.id).select(CUSTOMER_COLS);
+  return !error && data && data[0] ? data[0] : null;
+}
 
 function normPhone(raw) {
   let d = String(raw || '').replace(/[^0-9]/g, '');
@@ -210,7 +283,7 @@ function Frame({ children, onLogout, email }) {
         <title>Cognix client portal</title>
         <meta name="robots" content="noindex" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style dangerouslySetInnerHTML={{ __html: 'body{margin:0;background:#0f172a}' }} />
+        <style dangerouslySetInnerHTML={{ __html: THEME_CSS }} />
       </Head>
       <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.25rem 1.25rem 4rem 1.25rem' }}>
         <header style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
@@ -219,6 +292,7 @@ function Frame({ children, onLogout, email }) {
           <div style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
             Cognix <span style={{ color: c.muted, fontWeight: 600, fontSize: '0.95rem' }}>client portal</span>
           </div>
+          <ThemeToggle />
           {onLogout && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <span style={{ color: c.muted, fontSize: '0.85rem' }}>{email}</span>
@@ -275,7 +349,7 @@ function ActionLink({ href, label, enabled, primary, onClick, newTab }) {
   const base = { ...(primary ? primaryBtn : ghostBtn), display: 'block', width: '100%', marginTop: '0.6rem' };
   if (!enabled) {
     return (
-      <span style={{ ...base, background: '#1a2744', color: '#5b6b8c', border: 'none', cursor: 'not-allowed' }}>
+      <span style={{ ...base, background: 'var(--surface2)', color: 'var(--faint)', border: 'none', cursor: 'not-allowed' }}>
         {label}
       </span>
     );
@@ -378,7 +452,7 @@ function formFrom(cu) {
   };
 }
 
-function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
+function CustomerDetail({ customer, client, onBack, onChange, onDeleted, onBehalf }) {
   const [f, setF] = useState(formFrom(customer));
   const [acts, setActs] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -387,14 +461,13 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
 
   useEffect(() => {
     let alive = true;
-    supabase.from('customer_activities')
-      .select('id, kind, channel, body, created_at')
-      .eq('customer_id', customer.id)
-      .order('created_at', { ascending: false })
-      .limit(100)
-      .then(({ data, error }) => {
-        if (alive) setActs(error ? [] : (data || []));
-      });
+    const load = (cols) => supabase.from('customer_activities').select(cols)
+      .eq('customer_id', customer.id).order('created_at', { ascending: false }).limit(100);
+    load('id, kind, channel, body, created_at, actor_email').then(async (res) => {
+      let out = res;
+      if (res.error) out = await load('id, kind, channel, body, created_at');
+      if (alive) setActs(out.error ? [] : (out.data || []));
+    });
     return () => { alive = false; };
   }, [customer.id]);
 
@@ -404,7 +477,7 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
   async function addActivity(kind, channel, body) {
     const { data, error } = await supabase.from('customer_activities')
       .insert({ customer_id: customer.id, client_id: client.id, kind, channel: channel || null, body: body || null })
-      .select('id, kind, channel, body, created_at');
+      .select('*');
     if (error || !data || !data[0]) return null;
     setActs((list) => [data[0], ...(list || [])]);
     return data[0];
@@ -490,9 +563,7 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
     onDeleted(customer.id);
   }
 
-  const first = (customer.full_name || '').trim().split(/\s+/)[0];
-  const message = (first ? 'Hi ' + first + ',' : 'Hi,') + ' thank you for visiting ' + client.business_name
-    + ". We'd love to hear how it went - it only takes a few seconds: " + standLink;
+  const message = requestMessage(client, customer, onBehalf);
   const num = normPhone(customer.phone);
   const phoneOk = !!num && num.length >= 11 && num.length <= 15;
   const emailOk = isEmail(customer.email);
@@ -516,6 +587,7 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
         </div>}
         subtitle={'Added ' + fmtDate(customer.created_at)
           + (customer.source === 'stand_feedback' ? ' from your stand feedback form'
+            : customer.source === 'stand_signup' ? ' when they left their details on your stand'
             : customer.source === 'import' ? ' by importing your list' : '')
           + (customer.last_contacted_at ? '. Last contacted ' + fmtDate(customer.last_contacted_at) : '') + '.'}>
         <form onSubmit={save} noValidate>
@@ -547,7 +619,7 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1rem' }}>
             <button type="submit" disabled={!dirty} style={{ ...primaryBtn, opacity: dirty ? 1 : 0.5 }}>Save changes</button>
             <button type="button" onClick={logContact} style={ghostBtn}>I contacted them</button>
-            <button type="button" onClick={remove} style={{ ...ghostBtn, color: c.red, borderColor: '#5a2a2a' }}>Delete customer</button>
+            <button type="button" onClick={remove} style={{ ...ghostBtn, color: c.red, borderColor: 'var(--bad)' }}>Delete customer</button>
           </div>
           {msg && (
             <p role="status" style={{ margin: '0.75rem 0 0 0', fontSize: '0.9rem',
@@ -598,7 +670,7 @@ function CustomerDetail({ customer, client, onBack, onChange, onDeleted }) {
           <div key={a.id} style={{ borderTop: '1px solid ' + c.line, padding: '0.8rem 0', marginTop: '0.8rem' }}>
             <div style={{ display: 'flex', gap: '0.7rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <Pill text={KIND[a.kind] || a.kind} color={a.kind === 'complaint' ? c.red : c.muted} />
-              <span style={{ color: c.muted, fontSize: '0.8rem' }}>{fmtDate(a.created_at)}</span>
+              <span style={{ color: c.muted, fontSize: '0.8rem' }}>{fmtDate(a.created_at)}{a.actor_email ? ' - by ' + a.actor_email : ''}</span>
             </div>
             <p style={{ margin: '0.4rem 0 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.body}</p>
           </div>
@@ -791,7 +863,338 @@ function ImportCustomers({ client, customers, onImported, onCancel }) {
   );
 }
 
-function CustomersTab({ client, customers, setCustomers, error, focusId, setFocusId, reqCount }) {
+// Pulls a name, a phone number and an email out of one line of pasted text.
+function parsePasted(text) {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach((line) => {
+    const raw = line.trim();
+    if (!raw) return;
+    const em = raw.match(/[^\s,;<>()]+@[^\s,;<>()]+\.[^\s,;<>()]+/);
+    let rest = em ? raw.replace(em[0], ' ') : raw;
+    const ph = rest.match(/(\+?\d[\d\s\-().]{7,}\d)/);
+    if (ph) rest = rest.replace(ph[0], ' ');
+    out.push({
+      name: rest.replace(/[,;|\t]+/g, ' ').replace(/\s+/g, ' ').trim(),
+      email: em ? em[0].toLowerCase() : '',
+      phone: ph ? ph[0].trim() : '',
+    });
+  });
+  return out.slice(0, 200);
+}
+
+function QuickAdd({ client, customers, setCustomers, onOpen }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [showEmail, setShowEmail] = useState(false);
+  const [err, setErr] = useState('');
+  const [recent, setRecent] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [pasted, setPasted] = useState('');
+  const [pasteMsg, setPasteMsg] = useState('');
+  const nameRef = useRef(null);
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const addedToday = customers.filter((x) => x.created_at >= startOfDay.toISOString()).length;
+
+  async function saveRows(rows) {
+    const saved = [];
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const res = await supabase.from('customers').insert(chunk).select(CUSTOMER_COLS);
+      if (!res.error && res.data) { saved.push(...res.data); continue; }
+      for (const row of chunk) {
+        const one = await supabase.from('customers').insert(row).select(CUSTOMER_COLS);
+        if (!one.error && one.data && one.data[0]) saved.push(one.data[0]);
+      }
+    }
+    if (saved.length) setCustomers((list) => [...saved, ...list]);
+    return saved;
+  }
+  const baseRow = (r) => ({ ...r, client_id: client.id, source: 'manual', status: 'new', consent: 'unknown' });
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr('');
+    const em = email.trim().toLowerCase();
+    const np = normPhone(phone);
+    if (!phone.trim() && !em) { setErr('Please add a cellphone number (or an email) so we can reach them.'); return; }
+    if (phone.trim() && (!np || np.length < 11 || np.length > 15)) {
+      setErr('That cellphone number does not look right. Try something like 082 123 4567.');
+      return;
+    }
+    if (em && !isEmail(em)) { setErr('That email address does not look right.'); return; }
+    const dup = customers.find((x) => (em && x.email === em) || (np && normPhone(x.phone) === np));
+    if (dup) { setErr(displayName(dup) + ' is already in your list.'); return; }
+    setSaving(true);
+    const saved = await saveRows([baseRow({
+      full_name: name.trim().slice(0, 120) || null, phone: phone.trim().slice(0, 40) || null, email: em || null,
+    })]);
+    setSaving(false);
+    if (!saved.length) { setErr('Could not save that. Please try again.'); return; }
+    setRecent((r) => [displayName(saved[0]), ...r].slice(0, 5));
+    setName(''); setPhone(''); setEmail('');
+    if (nameRef.current) nameRef.current.focus();
+  }
+
+  // Preview what a pasted list would do.
+  let plan = null;
+  if (pasted.trim()) {
+    const seenE = new Set(customers.map((x) => x.email).filter(Boolean));
+    const seenP = new Set(customers.map((x) => normPhone(x.phone)).filter(Boolean));
+    plan = { fresh: [], skipped: 0 };
+    parsePasted(pasted).forEach((it) => {
+      const cl = cleanImportItem({ ...it, notes: '', tags: '' });
+      if (!cl.ok || (!cl.row.phone && !cl.row.email)) { plan.skipped += 1; return; }
+      if ((cl.row.email && seenE.has(cl.row.email)) || (cl.np && seenP.has(cl.np))) { plan.skipped += 1; return; }
+      if (cl.row.email) seenE.add(cl.row.email);
+      if (cl.np) seenP.add(cl.np);
+      plan.fresh.push(cl.row);
+    });
+  }
+
+  async function addPasted() {
+    if (!plan || plan.fresh.length === 0) return;
+    setSaving(true);
+    const saved = await saveRows(plan.fresh.map(baseRow));
+    setSaving(false);
+    setPasteMsg('Added ' + saved.length + ' customer' + (saved.length === 1 ? '' : 's') + '.');
+    setPasted('');
+  }
+
+  return (
+    <div>
+      <Card title="Add a customer"
+        subtitle="Type a name and a cellphone number, then press Add. That is all - Cognix takes it from here and asks your customers for a review."
+        right={<span style={{ color: c.muted, fontSize: '0.85rem' }}>Added today: <b style={{ color: c.text }}>{addedToday}</b></span>}>
+        <form onSubmit={submit} noValidate>
+          <label style={{ ...labelStyle, marginTop: 0 }}>Name</label>
+          <input ref={nameRef} style={{ ...inputStyle, fontSize: '1.1rem', padding: '1rem' }} value={name}
+            onChange={(e) => setName(e.target.value)} maxLength={120} aria-label="Name" autoFocus
+            placeholder="e.g. Thandi Nkosi" />
+          <label style={labelStyle}>Cellphone number</label>
+          <input style={{ ...inputStyle, fontSize: '1.1rem', padding: '1rem' }} type="tel" value={phone}
+            onChange={(e) => setPhone(e.target.value)} maxLength={40} aria-label="Cellphone number"
+            placeholder="082 123 4567" />
+          {showEmail ? (
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                maxLength={254} aria-label="Email" />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEmail(true)}
+              style={{ ...smallBtn, marginTop: '0.8rem', border: 'none', padding: '0.3rem 0', color: c.electricText }}>
+              + Add an email too
+            </button>
+          )}
+          <button type="submit" disabled={saving}
+            style={{ ...primaryBtn, width: '100%', marginTop: '1.1rem', fontSize: '1.1rem', padding: '1rem' }}>
+            {saving ? 'Saving...' : 'Add customer'}
+          </button>
+          {err && <p role="alert" style={{ color: c.red, margin: '0.75rem 0 0 0', fontSize: '0.92rem' }}>{err}</p>}
+        </form>
+        {recent.length > 0 && (
+          <p style={{ color: c.green, fontSize: '0.88rem', lineHeight: 1.6, margin: '1rem 0 0 0' }}>
+            Added just now: {recent.join(', ')}
+          </p>
+        )}
+      </Card>
+
+      <Card title="Add several at once"
+        subtitle="Paste a list - one person per line, like the names and numbers from today's appointments. We pick out the name and number for you.">
+        <textarea style={{ ...inputStyle, minHeight: '7rem' }} value={pasted} aria-label="Paste a list"
+          onChange={(e) => { setPasted(e.target.value); setPasteMsg(''); }}
+          placeholder={'Thandi Nkosi 082 123 4567\nSipho Dlamini, 071 555 0000'} />
+        {plan && (
+          <p style={{ margin: '0.75rem 0 0 0', lineHeight: 1.6 }}>
+            <b>{plan.fresh.length}</b> {plan.fresh.length === 1 ? 'person' : 'people'} will be added
+            {plan.skipped > 0 ? ' (' + plan.skipped + ' skipped: already in your list, or no usable number)' : ''}.
+          </p>
+        )}
+        <button type="button" onClick={addPasted} disabled={saving || !plan || plan.fresh.length === 0}
+          style={{ ...primaryBtn, marginTop: '0.75rem', opacity: !plan || plan.fresh.length === 0 ? 0.5 : 1 }}>
+          Add them all
+        </button>
+        {pasteMsg && <p role="status" style={{ color: c.green, margin: '0.75rem 0 0 0' }}>{pasteMsg}</p>}
+      </Card>
+
+      <Card title="Everyone you have added">
+        <button onClick={() => onOpen('')} style={smallBtn}>See the full list</button>
+      </Card>
+    </div>
+  );
+}
+
+function ReviewQueue({ client, customers, onUpdated, onClose, onBehalf }) {
+  const [asked, setAsked] = useState(null); // customer id -> when they were last asked
+  const [channel, setChannel] = useState('whatsapp');
+  const [cooldown, setCooldown] = useState(60);
+  const [batch, setBatch] = useState(20);
+  const [confirmed, setConfirmed] = useState(false);
+  const [queue, setQueue] = useState(null); // null = not started, otherwise a list of customer ids
+  const [pos, setPos] = useState(0);
+  const [done, setDone] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.from('customer_activities').select('customer_id, created_at')
+      .eq('client_id', client.id).eq('kind', 'review_request')
+      .order('created_at', { ascending: false }).limit(5000)
+      .then(({ data, error }) => {
+        if (!alive) return;
+        const map = {};
+        (error ? [] : data || []).forEach((r) => { if (!map[r.customer_id]) map[r.customer_id] = r.created_at; });
+        setAsked(map);
+      });
+    return () => { alive = false; };
+  }, [client.id]);
+
+  const cutoff = Date.now() - cooldown * 24 * 60 * 60 * 1000;
+  const eligible = asked === null ? [] : customers
+    .filter((cu) => canAsk(cu, channel, asked, cutoff))
+    .sort((x, y) => (asked[x.id] || '').localeCompare(asked[y.id] || '') || x.created_at.localeCompare(y.created_at));
+
+  const channelName = { whatsapp: 'WhatsApp', sms: 'SMS', email: 'email' }[channel];
+  const current = queue && pos < queue.length ? customers.find((x) => x.id === queue[pos]) : null;
+
+  function start() {
+    setQueue(eligible.slice(0, batch).map((x) => x.id));
+    setPos(0);
+    setDone(0);
+  }
+
+  async function sent(cu) {
+    setDone((d) => d + 1);
+    setPos((p) => p + 1);
+    setAsked((m) => ({ ...(m || {}), [cu.id]: new Date().toISOString() }));
+    const updated = await recordReviewRequest(client, cu, channel);
+    if (updated) onUpdated(updated);
+  }
+
+  if (queue !== null && pos < queue.length && !current) {
+    // that customer was removed while the queue was running: move on
+    window.setTimeout(() => setPos((p) => p + 1), 0);
+  }
+
+  if (queue !== null && pos >= queue.length) {
+    return (
+      <Card title="All done for now">
+        <p style={{ margin: 0, lineHeight: 1.6 }}>
+          You opened <b>{done}</b> review request{done === 1 ? '' : 's'} on {channelName}.
+          {eligible.length > 0 ? ' ' + eligible.length + ' more can still be asked - come back tomorrow.' : ''}
+        </p>
+        <p style={{ color: c.muted, fontSize: '0.85rem', lineHeight: 1.55 }}>
+          If anyone replies STOP, open them under Customers and set &quot;Did they agree to be contacted?&quot;
+          to &quot;Don&apos;t contact&quot;.
+        </p>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <button onClick={() => setQueue(null)} style={primaryBtn}>Start another batch</button>
+          <button onClick={onClose} style={ghostBtn}>Close</button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (queue !== null && current) {
+    const num = normPhone(current.phone);
+    const message = requestMessage(client, current, onBehalf);
+    const href = channel === 'whatsapp' ? 'https://wa.me/' + num + '?text=' + encodeURIComponent(message)
+      : channel === 'sms' ? 'sms:+' + num + '?&body=' + encodeURIComponent(message)
+      : 'mailto:' + current.email + '?subject='
+        + encodeURIComponent('How was your visit to ' + client.business_name + '?')
+        + '&body=' + encodeURIComponent(message);
+    return (
+      <Card title={'Customer ' + (pos + 1) + ' of ' + queue.length}
+        subtitle={done + ' opened so far. Tap the green button, press send in the app that opens, then come back for the next one.'}
+        right={<button onClick={() => setQueue(null)} style={smallBtn}>Stop for now</button>}>
+        <div style={{ height: '0.5rem', background: c.bg, borderRadius: '9999px', overflow: 'hidden' }}>
+          <div style={{ width: Math.round((pos * 100) / queue.length) + '%', height: '100%', background: c.electric }} />
+        </div>
+        <h3 style={{ margin: '1.1rem 0 0.2rem 0', fontSize: '1.3rem' }}>{displayName(current)}</h3>
+        <div style={{ color: c.muted, fontSize: '0.9rem' }}>
+          {channel === 'email' ? current.email : current.phone}
+        </div>
+        <div style={{ background: c.bg, border: '1px solid ' + c.line, borderRadius: '0.6rem', padding: '0.8rem',
+                      color: c.muted, fontSize: '0.88rem', lineHeight: 1.55, marginTop: '0.9rem' }}>
+          {message}
+        </div>
+        <a href={href} onClick={() => sent(current)} target={channel === 'whatsapp' ? '_blank' : undefined}
+          rel={channel === 'whatsapp' ? 'noreferrer' : undefined}
+          style={{ ...primaryBtn, display: 'block', width: '100%', marginTop: '1rem', background: '#16a34a' }}>
+          {'Open ' + channelName + ' and send'}
+        </a>
+        <button onClick={() => setPos((p) => p + 1)} style={{ ...ghostBtn, width: '100%', marginTop: '0.6rem' }}>
+          Skip this person
+        </button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Review request queue"
+      subtitle="Work through a long list quickly. We line up the right people, one at a time, with the message ready - you press send. It leaves out anyone who has asked not to be contacted, anyone with an open complaint, anyone who already left a review, and anyone asked recently.">
+      {onBehalf && (
+        <p style={{ color: c.amber, fontSize: '0.88rem', lineHeight: 1.5, margin: '0 0 0.8rem 0' }}>
+          You are working as the Cognix team. Messages will say they come from Cognix on behalf of {client.business_name}.
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 10rem' }}>
+          <label style={{ ...labelStyle, marginTop: 0 }}>Send by</label>
+          <select style={inputStyle} value={channel} onChange={(e) => setChannel(e.target.value)} aria-label="Send by">
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS (from a phone)</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+        <div style={{ flex: '1 1 10rem' }}>
+          <label style={{ ...labelStyle, marginTop: 0 }}>Skip anyone asked in the last</label>
+          <select style={inputStyle} value={cooldown} onChange={(e) => setCooldown(Number(e.target.value))} aria-label="Skip anyone asked in the last">
+            <option value={30}>30 days</option>
+            <option value={60}>60 days</option>
+            <option value={90}>90 days</option>
+            <option value={180}>180 days</option>
+          </select>
+        </div>
+        <div style={{ flex: '1 1 10rem' }}>
+          <label style={{ ...labelStyle, marginTop: 0 }}>People in this batch</label>
+          <select style={inputStyle} value={batch} onChange={(e) => setBatch(Number(e.target.value))} aria-label="People in this batch">
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={30}>30</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+      </div>
+      <p style={{ margin: '1rem 0 0 0', lineHeight: 1.6 }}>
+        {asked === null ? 'Checking your list...'
+          : <span><b>{eligible.length}</b> customer{eligible.length === 1 ? '' : 's'} can be asked right now by {channelName}.</span>}
+      </p>
+      {channel !== 'email' && (
+        <p style={{ color: c.muted, fontSize: '0.82rem', lineHeight: 1.55, margin: '0.4rem 0 0 0' }}>
+          Keep to about 20 a day and spread them out. WhatsApp can block a number that messages many
+          people who have not messaged it first.
+        </p>
+      )}
+      <label style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginTop: '1rem', color: c.muted, fontSize: '0.88rem', lineHeight: 1.5 }}>
+        <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)}
+          aria-label="Confirm these customers have dealt with the business" style={{ marginTop: '0.25rem' }} />
+        <span>These customers have dealt with {client.business_name}, and each person will get one message.</span>
+      </label>
+      <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+        <button onClick={start} disabled={!confirmed || eligible.length === 0}
+          style={{ ...primaryBtn, opacity: !confirmed || eligible.length === 0 ? 0.5 : 1 }}>
+          Start the queue
+        </button>
+        <button onClick={onClose} style={ghostBtn}>Close</button>
+      </div>
+    </Card>
+  );
+}
+
+function CustomersTab({ client, customers, setCustomers, error, focusId, setFocusId, reqCount, onBehalf }) {
   const [mode, setMode] = useState('list'); // list | add | import
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -812,7 +1215,7 @@ function CustomersTab({ client, customers, setCustomers, error, focusId, setFocu
   const selected = focusId ? customers.find((x) => x.id === focusId) : null;
   if (selected) {
     return (
-      <CustomerDetail key={selected.id} customer={selected} client={client}
+      <CustomerDetail key={selected.id} customer={selected} client={client} onBehalf={onBehalf}
         onBack={() => setFocusId('')}
         onChange={(u) => setCustomers((list) => list.map((x) => (x.id === u.id ? { ...x, ...u } : x)))}
         onDeleted={(id) => { setCustomers((list) => list.filter((x) => x.id !== id)); setFocusId(''); }} />
@@ -847,6 +1250,7 @@ function CustomersTab({ client, customers, setCustomers, error, focusId, setFocu
         right={<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button onClick={() => setMode(mode === 'add' ? 'list' : 'add')} style={primaryBtn}>Add a customer</button>
           <button onClick={() => setMode(mode === 'import' ? 'list' : 'import')} style={ghostBtn}>Import a list</button>
+          <button onClick={() => setMode(mode === 'queue' ? 'list' : 'queue')} style={ghostBtn}>Review request queue</button>
         </div>}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
           <Stat label="Customers" value={customers.length} />
@@ -859,6 +1263,10 @@ function CustomersTab({ client, customers, setCustomers, error, focusId, setFocu
       {mode === 'add' && (
         <AddCustomer client={client} customers={customers} onCancel={() => setMode('list')}
           onAdded={(row) => { setCustomers((list) => [row, ...list]); setMode('list'); setFocusId(row.id); }} />
+      )}
+      {mode === 'queue' && (
+        <ReviewQueue client={client} customers={customers} onBehalf={onBehalf} onClose={() => setMode('list')}
+          onUpdated={(u) => setCustomers((list) => list.map((x) => (x.id === u.id ? { ...x, ...u } : x)))} />
       )}
       {mode === 'import' && (
         <ImportCustomers client={client} customers={customers} onCancel={() => setMode('list')}
@@ -922,15 +1330,19 @@ function CustomersTab({ client, customers, setCustomers, error, focusId, setFocu
 // Overview + dashboard shell
 // ---------------------------------------------------------------------------
 
-function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCount, customers, onClientUpdated, openCustomer }) {
+function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCount, customers, onClientUpdated, openCustomer, userEmail, access, setAccess }) {
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState('');
   const [copied, setCopied] = useState(false);
   const [linkInput, setLinkInput] = useState(client.google_review_url || '');
   const [linkMsg, setLinkMsg] = useState(null);
   const [localReviews, setLocalReviews] = useState(null);
+  const [collectMsg, setCollectMsg] = useState('');
+  const [offerInput, setOfferInput] = useState(client.lead_offer || '');
+  const [offerMsg, setOfferMsg] = useState(null);
 
   const list = localReviews || reviews;
+  const isService = client.business_type === 'service';
   const standLink = client.slug ? SITE + '/r/' + client.slug : '';
   const unhandled = (list || []).filter((r) => !r.handled).length;
   const shown = (list || []).filter((r) => {
@@ -960,6 +1372,45 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
       [['Date', 'Stars', 'Message', 'Name', 'Email', 'Call-back number', 'Handled']].concat(
         (list || []).map((r) => [fmtDate(r.created_at), r.stars, r.feedback || '', r.contact_name || '',
           r.contact_email || '', r.contact_phone || '', r.handled ? 'Yes' : 'No'])));
+  }
+
+  const isOwner = !!userEmail && !!client.manager_email
+    && userEmail.toLowerCase() === client.manager_email.toLowerCase();
+
+  async function toggleCollect() {
+    const next = !client.collect_happy_details;
+    setCollectMsg('');
+    const { data, error } = await supabase.from('clients')
+      .update({ collect_happy_details: next }).eq('id', client.id).select('id');
+    if (error || !data || data.length === 0) {
+      setCollectMsg('Could not change that. Please try again.');
+      return;
+    }
+    onClientUpdated({ id: client.id, collect_happy_details: next });
+  }
+
+  async function saveOffer(e) {
+    e.preventDefault();
+    const v = offerInput.trim().slice(0, 120);
+    setOfferMsg(null);
+    const { data, error } = await supabase.from('clients')
+      .update({ lead_offer: v || null }).eq('id', client.id).select('id');
+    if (error || !data || data.length === 0) {
+      setOfferMsg({ type: 'error', text: 'Could not save that. Please try again.' });
+      return;
+    }
+    onClientUpdated({ id: client.id, lead_offer: v || null });
+    setOfferMsg({ type: 'ok', text: v ? 'Saved. Customers will be offered: ' + v : 'Saved. No reward will be offered.' });
+  }
+
+  async function removeAccess(row) {
+    if (!window.confirm('Remove ' + row.email + ' from your portal?')) return;
+    const { data, error } = await supabase.from('client_access').delete().eq('id', row.id).select('id');
+    if (error || !data || data.length === 0) {
+      setNotice('Could not remove that access. Please try again.');
+      return;
+    }
+    setAccess((list) => (list || []).filter((x) => x.id !== row.id));
   }
 
   async function copyLink() {
@@ -1007,7 +1458,8 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
         ) : (
           <div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <Stat label="Times the stand was opened" value={stats.opens} hint="Taps and scans" />
+              <Stat label={isService ? 'Times your review link was opened' : 'Times the stand was opened'} value={stats.opens}
+                hint={isService ? 'Taps on the link' : 'Taps and scans'} />
               <Stat label="Sent to Google" value={stats.google} hint="Rated 4 or 5 stars" />
               <Stat label="Private feedback" value={stats.priv} hint="Rated 3 stars or below" />
               <Stat label="Happy customers" value={happyPct === null ? '-' : happyPct + '%'}
@@ -1090,7 +1542,8 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
         ))}
       </Card>
 
-      <Card title="Your stand" subtitle="This is the link on your stand's NFC tag and QR code.">
+      <Card title={isService ? 'Your review link' : 'Your stand'}
+        subtitle={isService ? 'The link in the review requests sent to your customers.' : "This is the link on your stand's NFC tag and QR code."}>
         {standLink ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-start' }}>
             <div style={{ flex: '1 1 14rem' }}>
@@ -1103,6 +1556,7 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
                 <a href={standLink} target="_blank" rel="noreferrer" style={ghostBtn}>Test it</a>
               </div>
             </div>
+            {!isService && (
             <div style={{ flex: '0 0 auto', textAlign: 'center' }}>
               <img src={qrSrc} alt={'QR code for ' + client.business_name} width={150} height={150}
                 style={{ background: '#fff', borderRadius: '0.5rem', display: 'block' }} />
@@ -1111,6 +1565,7 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
                 Open large QR code
               </a>
             </div>
+            )}
           </div>
         ) : (
           <p style={{ color: c.muted, margin: 0 }}>
@@ -1134,6 +1589,53 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
         </form>
       </Card>
 
+      {!isService && client.collect_happy_details !== undefined && (
+        <Card title="Turn happy customers into leads"
+          subtitle="Keep the details of customers who rate you 4 or 5 stars, without losing the review.">
+          <label style={{ display: 'flex', gap: '0.7rem', alignItems: 'flex-start', cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!client.collect_happy_details} onChange={toggleCollect}
+              aria-label="Ask happy customers to stay in touch" style={{ marginTop: '0.25rem' }} />
+            <span>Ask happy customers if they would like to stay in touch</span>
+          </label>
+          <p style={{ color: c.muted, fontSize: '0.85rem', lineHeight: 1.55, margin: '0.75rem 0 0 0' }}>
+            When this is on, customers who rate 4 or 5 stars are sent straight to your Google page,
+            which opens in a new tab. This page stays open behind it with a thank-you: they leave their
+            details and get their reward code. A review always comes first. Anyone who does not come
+            back to the page simply gives you the review.
+          </p>
+          <form onSubmit={saveOffer} style={{ marginTop: '0.9rem' }}>
+            <label style={{ ...labelStyle, marginTop: 0 }}>Your thank-you reward (for example: 10% off your next visit)</label>
+            <input style={inputStyle} value={offerInput} onChange={(e) => setOfferInput(e.target.value)}
+              maxLength={120} aria-label="Thank-you reward" placeholder="10% off your next visit" />
+            <button type="submit" style={{ ...smallBtn, marginTop: '0.6rem' }}>Save reward</button>
+            {offerMsg && (
+              <p role="status" style={{ margin: '0.6rem 0 0 0', fontSize: '0.88rem',
+                color: offerMsg.type === 'ok' ? c.green : c.red }}>{offerMsg.text}</p>
+            )}
+          </form>
+          <p style={{ color: c.muted, fontSize: '0.82rem', lineHeight: 1.55, margin: '0.6rem 0 0 0' }}>
+            Customers get a short code to show your team. Find them by searching for the code under Customers.
+          </p>
+          {collectMsg && <p role="alert" style={{ color: c.red, margin: '0.6rem 0 0 0' }}>{collectMsg}</p>}
+        </Card>
+      )}
+
+      {access && (
+        <Card title="Who can see this portal"
+          subtitle="The people below can see and work in this portal. The Cognix team can help send review requests on your behalf. You can remove their access at any time.">
+          <div style={{ padding: '0.5rem 0' }}>
+            <b>{client.manager_email}</b> <span style={{ color: c.muted }}>- owner</span>
+          </div>
+          {access.map((a) => (
+            <div key={a.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1rem', alignItems: 'center',
+                                     borderTop: '1px solid ' + c.line, padding: '0.6rem 0' }}>
+              <span><b>{a.email}</b> <span style={{ color: c.muted }}>- Cognix team</span></span>
+              {isOwner && <button onClick={() => removeAccess(a)} style={smallBtn}>Remove access</button>}
+            </div>
+          ))}
+        </Card>
+      )}
+
       <Card title="Need help?">
         <p style={{ color: c.muted, margin: 0, lineHeight: 1.6 }}>
           Message us on <a href={'https://wa.me/' + SUPPORT_WHATSAPP} style={{ color: c.electricText }}>WhatsApp</a>{' '}
@@ -1144,8 +1646,8 @@ function OverviewTab({ client, stats, statsError, reviews, reviewsError, reqCoun
   );
 }
 
-function Dashboard({ client, clients, onSelect, onClientUpdated }) {
-  const [tab, setTab] = useState('overview');
+function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail }) {
+  const [tab, setTab] = useState(client.business_type === 'service' ? 'add' : 'overview');
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState('');
   const [reviews, setReviews] = useState(null);
@@ -1154,6 +1656,7 @@ function Dashboard({ client, clients, onSelect, onClientUpdated }) {
   const [customersError, setCustomersError] = useState('');
   const [reqCount, setReqCount] = useState(null);
   const [focusId, setFocusId] = useState('');
+  const [access, setAccess] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -1196,10 +1699,19 @@ function Dashboard({ client, clients, onSelect, onClientUpdated }) {
       .then(({ count: n, error }) => {
         if (alive) setReqCount(error ? null : n || 0);
       });
+
+    supabase.from('client_access').select('id, email, role').eq('client_id', client.id)
+      .order('email')
+      .then(({ data, error }) => {
+        if (alive) setAccess(error ? null : data || []);
+      });
     return () => { alive = false; };
   }, [client.id]);
 
   const dueCount = (customers || []).filter(isDue).length;
+  const onBehalf = !!userEmail && !!client.manager_email
+    && userEmail.toLowerCase() !== client.manager_email.toLowerCase();
+  const isService = client.business_type === 'service';
 
   function openCustomer(id) {
     setFocusId(id);
@@ -1221,7 +1733,7 @@ function Dashboard({ client, clients, onSelect, onClientUpdated }) {
                     marginTop: '1.5rem' }}>
         <h1 style={{ fontSize: '1.7rem', margin: 0 }}>{client.business_name}</h1>
         <span style={{ fontSize: '0.78rem', fontWeight: 700, padding: '0.25rem 0.7rem',
-          borderRadius: '9999px', background: client.active === false ? '#4a1d1d' : '#0f3d2e',
+          borderRadius: '9999px', background: client.active === false ? 'var(--bad-bg)' : 'var(--ok-bg)',
           color: client.active === false ? c.red : c.green }}>
           {client.active === false ? 'Paused' : 'Live'}
         </span>
@@ -1239,18 +1751,32 @@ function Dashboard({ client, clients, onSelect, onClientUpdated }) {
         </p>
       )}
 
+      {onBehalf && (
+        <p style={{ color: c.amber, lineHeight: 1.55, margin: '0.75rem 0 0 0', fontSize: '0.9rem' }}>
+          You are working in this portal as the Cognix team, on behalf of {client.business_name}.
+          They can see this, and can remove our access at any time.
+        </p>
+      )}
+
       <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1.25rem' }}>
-        {tabBtn('overview', 'Overview')}
+        {isService && tabBtn('add', 'Add customers')}
+        {!isService && tabBtn('overview', 'Overview')}
         {tabBtn('customers', dueCount > 0 ? 'Customers (' + dueCount + ' to follow up)' : 'Customers')}
+        {isService && tabBtn('overview', 'Overview')}
       </div>
 
-      {tab === 'overview' ? (
+      {tab === 'add' ? (
+        <QuickAdd client={client} customers={customers || []} setCustomers={setCustomers}
+          onOpen={(id) => { setFocusId(id); setTab('customers'); }} />
+      ) : tab === 'overview' ? (
         <OverviewTab client={client} stats={stats} statsError={statsError} reviews={reviews}
           reviewsError={reviewsError} reqCount={reqCount} customers={customers}
-          onClientUpdated={onClientUpdated} openCustomer={openCustomer} />
+          onClientUpdated={onClientUpdated} openCustomer={openCustomer}
+          userEmail={userEmail} access={access} setAccess={setAccess} />
       ) : (
         <CustomersTab client={client} customers={customers} setCustomers={setCustomers}
-          error={customersError} focusId={focusId} setFocusId={setFocusId} reqCount={reqCount} />
+          error={customersError} focusId={focusId} setFocusId={setFocusId} reqCount={reqCount}
+          onBehalf={onBehalf} />
       )}
     </div>
   );
@@ -1282,13 +1808,16 @@ export default function Portal() {
   useEffect(() => {
     if (!userId) { setClients(null); setLoadError(''); return undefined; }
     let alive = true;
-    supabase.from('clients')
-      .select('id, slug, business_name, google_review_url, manager_email, active')
-      .order('business_name')
-      .then(({ data, error }) => {
+    const load = (cols) => supabase.from('clients').select(cols).order('business_name');
+    load('id, slug, business_name, google_review_url, manager_email, active, collect_happy_details, business_type, lead_offer')
+      .then(async (res) => {
+        let out = res;
+        // If the newest database update has not been run yet, load without it.
+        if (res.error) out = await load('id, slug, business_name, google_review_url, manager_email, active, collect_happy_details');
+        if (out.error) out = await load('id, slug, business_name, google_review_url, manager_email, active');
         if (!alive) return;
-        if (error) { setLoadError(error.message); setClients([]); return; }
-        const list = data || [];
+        if (out.error) { setLoadError(out.error.message); setClients([]); return; }
+        const list = out.data || [];
         setClients(list);
         setSelectedId((cur) => cur || (list[0] ? list[0].id : ''));
       });
@@ -1337,7 +1866,7 @@ export default function Portal() {
   return (
     <Frame onLogout={logout} email={email}>
       <Dashboard key={current.id} client={current} clients={clients}
-        onSelect={setSelectedId} onClientUpdated={clientUpdated} />
+        onSelect={setSelectedId} onClientUpdated={clientUpdated} userEmail={email} />
     </Frame>
   );
 }
