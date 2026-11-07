@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 // ---- Your business details. Edit here if anything changes. ------------------
@@ -11,10 +11,43 @@ const PAYSTACK_LINK_STARTER = ''; // paste your R499/month Paystack payment page
 const PAYSTACK_LINK_PREMIUM = 'https://paystack.shop/pay/bc2bpk6ows';
 // -----------------------------------------------------------------------------
 
+// Light and dark mode: follows the visitor's device, with a small switch to override it.
+const THEME_DARK = '--bg:#0d0f12;--surface:#15181d;--surface2:#1d222a;--line:#2a303a;--text:#f2f4f7;--muted:#9aa3b0;--faint:#6b7480;--star-off:#3a414c;--danger:#fca5a5;--link:#7dd3c8;--shadow:0 24px 60px rgba(0,0,0,.45);--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--ok-bg:#0f3d2e;--bad-bg:#4a1d1d;';
+const THEME_LIGHT = '--bg:#f5f6f8;--surface:#ffffff;--surface2:#eef0f3;--line:#dde1e7;--text:#12151a;--muted:#566070;--faint:#8a93a0;--star-off:#d3d8df;--danger:#b42318;--link:#0f766e;--shadow:0 24px 60px rgba(16,24,40,.12);--ok:#047857;--warn:#b45309;--bad:#b91c1c;--ok-bg:#d1fae5;--bad-bg:#fee2e2;';
+const THEME_CSS = ':root{--accent:#0f766e;' + THEME_DARK + '}'
+  + '@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){' + THEME_LIGHT + '}}'
+  + ':root[data-theme="light"]{' + THEME_LIGHT + '}:root[data-theme="dark"]{' + THEME_DARK + '}'
+  + 'html,body{margin:0;background:var(--bg)}';
+
 const c = {
-  bg: '#0f172a', surface: '#131f38', line: '#22335a', text: '#f1f5f9', muted: '#a5b3cb',
-  electric: '#1f6fff', electricText: '#4db2ff', cyan: '#22d3ee', star: '#fbbf24',
+  bg: 'var(--bg)', surface: 'var(--surface)', line: 'var(--line)', text: 'var(--text)', muted: 'var(--muted)',
+  electric: 'var(--accent)', electricText: 'var(--link)', cyan: 'var(--link)', star: '#f5b301',
 };
+
+function ThemeToggle() {
+  const [mode, setMode] = useState('dark');
+  useEffect(() => {
+    let saved = '';
+    try { saved = window.localStorage.getItem('cx-theme') || ''; } catch (e) { /* ignore */ }
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    setMode(saved || (prefersLight ? 'light' : 'dark'));
+  }, []);
+  function flip() {
+    const next = mode === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { window.localStorage.setItem('cx-theme', next); } catch (e) { /* ignore */ }
+    setMode(next);
+  }
+  return (
+    <button type="button" onClick={flip}
+      aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+      style={{ background: 'transparent', border: '1px solid var(--line)', color: 'var(--muted)',
+               borderRadius: '9999px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+      {mode === 'light' ? 'Dark' : 'Light'}
+    </button>
+  );
+}
 const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
 const whatsappHref = 'https://wa.me/' + WHATSAPP_NUMBER;
@@ -81,7 +114,7 @@ const section = { padding: '4.5rem 0', borderTop: '1px solid ' + c.line };
 const ctaStyle = {
   display: 'inline-block', background: c.electric, color: '#fff', textDecoration: 'none',
   fontWeight: 800, fontSize: '1.1rem', padding: '1.05rem 1.9rem', borderRadius: '0.6rem',
-  boxShadow: '0 12px 32px rgba(31, 111, 255, 0.45)',
+  boxShadow: '0 12px 32px color-mix(in srgb, var(--accent) 35%, transparent)',
 };
 const ghostStyle = {
   display: 'inline-block', color: c.text, textDecoration: 'none', fontWeight: 700,
@@ -168,9 +201,9 @@ function qrPath(m) {
 function Finder({ x, y, m }) {
   return (
     <g transform={'translate(' + x + ' ' + y + ')'}>
-      <rect width={7 * m} height={7 * m} fill="#0b1224" />
+      <rect width={7 * m} height={7 * m} fill="#0e1013" />
       <rect x={m} y={m} width={5 * m} height={5 * m} fill="#ffffff" />
-      <rect x={2 * m} y={2 * m} width={3 * m} height={3 * m} fill="#0b1224" />
+      <rect x={2 * m} y={2 * m} width={3 * m} height={3 * m} fill="#0e1013" />
     </g>
   );
 }
@@ -183,28 +216,28 @@ function HeroScene() {
       aria-label="A Cognix Smart Counter Stand on a counter, with a customer's phone tapping it">
       <defs>
         <radialGradient id="cxGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#1f6fff" stopOpacity="0.38" />
-          <stop offset="100%" stopColor="#1f6fff" stopOpacity="0" />
+          <stop offset="0%" stopColor="#0f766e" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="#0f766e" stopOpacity="0" />
         </radialGradient>
         <linearGradient id="cxAcrylic" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#9fd0ff" stopOpacity="0.30" />
-          <stop offset="100%" stopColor="#9fd0ff" stopOpacity="0.06" />
+          <stop offset="0%" stopColor="#99e0d6" stopOpacity="0.30" />
+          <stop offset="100%" stopColor="#99e0d6" stopOpacity="0.06" />
         </linearGradient>
         <linearGradient id="cxCounterH" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#1d2f57" stopOpacity="0" />
-          <stop offset="18%" stopColor="#1d2f57" stopOpacity="1" />
-          <stop offset="82%" stopColor="#1d2f57" stopOpacity="1" />
-          <stop offset="100%" stopColor="#1d2f57" stopOpacity="0" />
+          <stop offset="0%" stopColor="#2a2f36" stopOpacity="0" />
+          <stop offset="18%" stopColor="#2a2f36" stopOpacity="1" />
+          <stop offset="82%" stopColor="#2a2f36" stopOpacity="1" />
+          <stop offset="100%" stopColor="#2a2f36" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="cxFade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0f172a" stopOpacity="0" />
-          <stop offset="100%" stopColor="#0f172a" stopOpacity="1" />
+          <stop offset="0%" style={{ stopColor: 'var(--bg)' }} stopOpacity="0" />
+          <stop offset="100%" style={{ stopColor: 'var(--bg)' }} stopOpacity="1" />
         </linearGradient>
         <linearGradient id="cxLine" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#4d7fd6" stopOpacity="0" />
-          <stop offset="20%" stopColor="#4d7fd6" stopOpacity="1" />
-          <stop offset="80%" stopColor="#4d7fd6" stopOpacity="1" />
-          <stop offset="100%" stopColor="#4d7fd6" stopOpacity="0" />
+          <stop offset="0%" stopColor="#2f9e92" stopOpacity="0" />
+          <stop offset="20%" stopColor="#2f9e92" stopOpacity="1" />
+          <stop offset="80%" stopColor="#2f9e92" stopOpacity="1" />
+          <stop offset="100%" stopColor="#2f9e92" stopOpacity="0" />
         </linearGradient>
       </defs>
 
@@ -219,35 +252,35 @@ function HeroScene() {
 
       <g transform="translate(-50 0)">
         <ellipse cx="260" cy="378" rx="120" ry="8" fill="#000000" opacity="0.35" />
-        <rect x="176" y="356" width="168" height="18" rx="6" fill="#0c1730" stroke="#35528d" />
+        <rect x="176" y="356" width="168" height="18" rx="6" fill="#111418" stroke="#3a414c" />
         <rect x="150" y="60" width="220" height="304" rx="16" fill="url(#cxAcrylic)"
-          stroke="#6fb4ff" strokeOpacity="0.6" strokeWidth="2" />
+          stroke="#5eead4" strokeOpacity="0.6" strokeWidth="2" />
         <rect x="166" y="76" width="188" height="272" rx="10" fill="#ffffff" />
         <image href={LOGO_SRC} x="176" y="84" width="168" height="58" />
-        <text x="260" y="168" textAnchor="middle" fontSize="15" fontWeight="700" fill="#0b2a6b"
+        <text x="260" y="168" textAnchor="middle" fontSize="15" fontWeight="700" fill="#134e4a"
           fontFamily="system-ui, sans-serif">Tap or scan to rate us</text>
         <text x="260" y="200" textAnchor="middle" fontSize="22" fill={c.star} letterSpacing="3">
           {star + star + star + star + star}
         </text>
         <g transform="translate(200 214)">
           <rect width="120" height="120" fill="#ffffff" />
-          <path d={qrPath(m)} fill="#0b1224" />
+          <path d={qrPath(m)} fill="#0e1013" />
           <Finder x={0} y={0} m={m} />
           <Finder x={14 * m} y={0} m={m} />
           <Finder x={0} y={14 * m} m={m} />
         </g>
       </g>
 
-      <g fill="none" stroke="#4db2ff" strokeWidth="3" strokeLinecap="round">
+      <g fill="none" stroke="#2dd4bf" strokeWidth="3" strokeLinecap="round">
         <path d="M352 205 Q344 228 352 251" opacity="0.95" />
         <path d="M343 195 Q328 228 343 261" opacity="0.6" />
         <path d="M334 185 Q312 228 334 271" opacity="0.32" />
       </g>
 
       <g transform="translate(374 146) rotate(-10)">
-        <rect width="106" height="200" rx="18" fill="#0b1224" stroke="#4a6fb5" strokeWidth="3" />
-        <rect x="7" y="7" width="92" height="186" rx="12" fill="#101a33" />
-        <rect x="38" y="12" width="30" height="5" rx="2.5" fill="#2a3b63" />
+        <rect width="106" height="200" rx="18" fill="#0e1013" stroke="#4b5563" strokeWidth="3" />
+        <rect x="7" y="7" width="92" height="186" rx="12" fill="#15181d" />
+        <rect x="38" y="12" width="30" height="5" rx="2.5" fill="#2a303a" />
         <text x="53" y="46" textAnchor="middle" fontSize="9" fill={c.muted}>Example Cafe</text>
         <text x="53" y="70" textAnchor="middle" fontSize="15" fill={c.star} letterSpacing="1">
           {star + star + star + star + star}
@@ -255,7 +288,7 @@ function HeroScene() {
         <text x="53" y="92" textAnchor="middle" fontSize="9" fontWeight="700" fill="#ffffff">
           Thank you!
         </text>
-        <rect x="16" y="102" width="74" height="26" rx="6" fill="#1f6fff" />
+        <rect x="16" y="102" width="74" height="26" rx="6" fill="#0f766e" />
         <text x="53" y="118" textAnchor="middle" fontSize="7" fontWeight="700" fill="#ffffff">
           Leave a public review
         </text>
@@ -282,12 +315,12 @@ function NfcIcon() {
 function PhoneFrame({ children, active }) {
   return (
     <div style={{ width: '11.5rem', height: '22rem', borderRadius: '1.8rem', boxSizing: 'border-box',
-                  border: '6px solid ' + (active ? c.electric : '#2a3b63'), background: '#0b1224',
+                  border: '6px solid ' + (active ? c.electric : '#2a303a'), background: '#0e1013',
                   padding: '0.6rem 0.65rem', display: 'flex', flexDirection: 'column',
                   boxShadow: active
-                    ? '0 0 0 3px rgba(31, 111, 255, 0.3), 0 24px 48px rgba(0, 0, 0, 0.45)'
+                    ? '0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), 0 24px 48px rgba(0, 0, 0, 0.45)'
                     : '0 24px 48px rgba(0, 0, 0, 0.45)' }}>
-      <div style={{ width: '3rem', height: '0.28rem', background: '#2a3b63', borderRadius: '9999px',
+      <div style={{ width: '3rem', height: '0.28rem', background: '#2a303a', borderRadius: '9999px',
                     margin: '0 auto 0.7rem auto' }} />
       {children}
     </div>
@@ -354,7 +387,7 @@ function Storyboard() {
                 {[1, 2, 3, 4, 5].map((i) => (
                   <button key={i} onClick={() => setN(i)} aria-label={i + ' out of 5 stars'}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                             fontSize: '1.8rem', lineHeight: 1, color: i <= n ? c.star : '#34456b' }}>
+                             fontSize: '1.8rem', lineHeight: 1, color: i <= n ? c.star : '#3a414c' }}>
                     &#9733;
                   </button>
                 ))}
@@ -394,7 +427,7 @@ function Storyboard() {
                             color: c.muted, fontSize: '0.74rem', lineHeight: 1.4, height: '3.4rem' }}>
                 The coffee was cold and we waited 20 minutes.
               </div>
-              <div style={{ ...miniButton, background: '#22335a' }}>Send to the manager</div>
+              <div style={{ ...miniButton, background: '#2a303a' }}>Send to the manager</div>
               <div style={{ ...smallLink, textAlign: 'center' }}>Prefer to post on Google? Leave a public review</div>
             </div>
           </PhoneFrame>
@@ -403,13 +436,13 @@ function Storyboard() {
         <Step n="4" title="You hear about it" dim={n > 0 && !isPrivate}
           text="Private feedback opens in WhatsApp, ready to send to your manager.">
           <PhoneFrame active={isPrivate}>
-            <div style={{ ...screen, borderRadius: '0.7rem', overflow: 'hidden', background: '#0d1b2a' }}>
+            <div style={{ ...screen, borderRadius: '0.7rem', overflow: 'hidden', background: '#0e1013' }}>
               <div style={{ background: '#123c3a', padding: '0.5rem 0.6rem', fontWeight: 700,
                             fontSize: '0.8rem' }}>
                 Manager
               </div>
               <div style={{ padding: '0.7rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <div style={{ alignSelf: 'flex-start', maxWidth: '90%', background: '#1c2b3a',
+                <div style={{ alignSelf: 'flex-start', maxWidth: '90%', background: '#1d222a',
                               borderRadius: '0.6rem 0.6rem 0.6rem 0.1rem', padding: '0.5rem 0.55rem',
                               fontSize: '0.74rem', lineHeight: 1.45 }}>
                   Feedback for Example Cafe: 3 out of 5 stars. The coffee was cold and we waited
@@ -433,11 +466,11 @@ export default function Home() {
         <meta name="description" content={DESCRIPTION} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style dangerouslySetInnerHTML={{
-          __html: 'html{scroll-behavior:smooth}body{margin:0;background:#0f172a}',
+          __html: 'html{scroll-behavior:smooth}' + THEME_CSS,
         }} />
       </Head>
 
-      <nav style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(15, 23, 42, 0.95)',
+      <nav style={{ position: 'sticky', top: 0, zIndex: 10, background: 'color-mix(in srgb, var(--bg) 94%, transparent)',
                     borderBottom: '1px solid ' + c.line }}>
         <div style={{ ...wrap, display: 'flex', flexWrap: 'wrap', alignItems: 'center',
                       justifyContent: 'space-between', gap: '0.75rem 1.5rem',
@@ -449,6 +482,7 @@ export default function Home() {
             <a href="#pricing" style={navLink}>Pricing</a>
             <a href="#faq" style={navLink}>Questions</a>
             <a href="/portal" style={navLink}>Client login</a>
+            <ThemeToggle />
             <a href={subscribeHref} style={{ ...navLink, color: '#fff', background: c.electric,
                       padding: '0.55rem 1.1rem', borderRadius: '0.5rem' }}>
               See pricing
@@ -457,7 +491,7 @@ export default function Home() {
         </div>
       </nav>
 
-      <div id="top" style={{ background: 'radial-gradient(60rem 30rem at 78% 0%, rgba(31, 111, 255, 0.20), rgba(15, 23, 42, 0) 70%)' }}>
+      <div id="top" style={{ background: 'radial-gradient(60rem 30rem at 78% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%)' }}>
         <div style={wrap}>
           <header style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem 3rem', alignItems: 'center',
                            padding: '4rem 0 4.5rem 0' }}>
@@ -551,7 +585,7 @@ export default function Home() {
                 <div key={plan.id} style={{ flex: '1 1 17rem', background: c.surface,
                     border: '1px solid ' + (plan.highlight ? c.electric : c.line),
                     borderRadius: '1rem', padding: '2rem', boxSizing: 'border-box',
-                    boxShadow: plan.highlight ? '0 0 48px rgba(31, 111, 255, 0.18)' : 'none' }}>
+                    boxShadow: plan.highlight ? '0 0 48px color-mix(in srgb, var(--accent) 14%, transparent)' : 'none' }}>
                   {plan.highlight && (
                     <span style={{ display: 'inline-block', background: c.electric, color: '#fff',
                       fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em',
