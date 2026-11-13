@@ -14,6 +14,15 @@ function readRaw(req) {
 }
 
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    // A quick check you can open in a browser: it says which settings are in place (never the values).
+    return res.status(200).json({
+      webhookReady: true,
+      PAYSTACK_SECRET_KEY: !!process.env.PAYSTACK_SECRET_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   const raw = await readRaw(req);
   if (!verifySignature(raw, req.headers['x-paystack-signature'], process.env.PAYSTACK_SECRET_KEY)) {
