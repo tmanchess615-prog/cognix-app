@@ -102,19 +102,19 @@ const CUSTOMER_COLS = 'id, full_name, email, phone, notes, tags, source, status,
   + 'consent_note, consent_at, follow_up_on, last_contacted_at, created_at, updated_at';
 
 // The message used to ask a customer for their feedback. The link is short and plain, and sits on
-// its own line so it is easy to tap. (WhatsApp and SMS turn a web address into a tappable link by
-// themselves; they cannot hide it behind words.) WhatsApp gets a pointer and bold text; SMS and
-// email stay plain, because an emoji would make each SMS count as several.
-function requestMessage(client, cu, onBehalf, channel) {
+// its own line so it is easy to tap (WhatsApp and SMS turn a web address into a tappable link by
+// themselves; they cannot hide it behind words). No emoji or formatting symbols: they can show up
+// as broken characters in WhatsApp Web, and an emoji makes each SMS count as several.
+function requestMessage(client, cu, onBehalf) {
   const first = (cu.full_name || '').trim().split(/\s+/)[0];
   const hello = first ? 'Hi ' + first + ',' : 'Hi,';
   const link = client.slug ? SITE + '/r/' + client.slug : '';
   const lead = onBehalf
     ? ' this is Cognix, sending a quick message on behalf of ' + client.business_name + '. Thank you for visiting!'
     : ' thank you for visiting ' + client.business_name + '.';
-  const ask = "We'd really like to hear your feedback on your visit. It only takes a few seconds.";
-  const tap = channel === 'whatsapp' ? '\uD83D\uDC49 *Tap here to share your feedback:*' : 'Tap here to share your feedback:';
-  return hello + lead + '\n\n' + ask + '\n\n' + tap + '\n' + link + "\n\nReply STOP and we won't message you again.";
+  return hello + lead + '\n\n'
+    + "We'd really like to hear your feedback on your visit. It only takes a few seconds.\n\n"
+    + 'Tap the link below to share your feedback:\n' + link;
 }
 
 // Who may be asked for a review right now, on a given channel.
