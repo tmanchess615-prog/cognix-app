@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
+import { DEFAULT_SUBJECT, DEFAULT_BODY, renderTemplate, dueCustomers } from '../lib/automation';
+import { draftReply } from '../lib/reviewReply';
 
 // ---------------------------------------------------------------------------
 // /portal  ->  where a client logs in to see how their stand is doing, and to
@@ -1044,6 +1046,178 @@ function QuickAdd({ client, customers, setCustomers, onOpen }) {
   );
 }
 
+const AUTO_BLANK = {
+  enabled: false, first_delay_days: 1, reminder_days: '', repeat_days: 0, max_requests: 3, daily_cap: 30, subject: '', body: '',
+};
+
+// Automatic review emails: switch them on, and choose how often they go out.
+function AutomationCard({ client, customers }) {
+  const [row, setRow] = useState(undefined); // undefined = loading, null = none yet, 'off' = not set up
+  const [f, setF] = useState(AUTO_BLANK);
+  const [requests, setRequests] = useState([]);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.from('automations').select('*').eq('client_id', client.id).then(({ data, error }) => {
+      if (!alive) return;
+      if (error) { setRow('off'); return; }
+      const r = data && data[0] ? data[0] : null;
+      setRow(r);
+      if (r) setF({ ...AUTO_BLANK, ...r, subject: r.subject || '', body: r.body || '', reminder_days: r.reminder_days || '' });
+    });
+    fetchAllRows(() => supabase.from('customer_activities').select('customer_id, created_at')
+      .eq('client_id', client.id).eq('kind', 'review_request').order('id'))
+      .then(({ data }) => { if (alive) setRequests(data || []); });
+    return () => { alive = false; };
+  }, [client.id]);
+
+  if (row === undefined) return null;
+  if (row === 'off') {
+    return (
+      <Card title="Automatic review emails">
+        <p style={{ color: c.muted, margin: 0 }}>Automatic emails need one more setup step. Please message us and we will switch them on.</p>
+      </Card>
+    );
+  }
+
+  const set = (k, num) => (e) => setF({ ...f, [k]: num ? Number(e.target.value) : e.target.value });
+  const settings = { ...f, first_delay_days: Number(f.first_delay_days), repeat_days: Number(f.repeat_days), max_requests: Number(f.max_requests), daily_cap: Number(f.daily_cap) };
+  const ready = f.enabled ? dueCustomers({ customers, requests, settings, now: new Date() }).length : 0;
+  const vars = { first_name: 'Thandi', business: client.business_name, link: '' };
+
+  async function save(e) {
+    e.preventDefault();
+    setMsg(null);
+    if (f.subject.length > 200 || f.body.length > 2000) { setMsg({ type: 'error', text: 'The subject or message is too long.' }); return; }
+    const values = {
+      enabled: !!f.enabled, first_delay_days: settings.first_delay_days, reminder_days: f.reminder_days, repeat_days: settings.repeat_days,
+      max_requests: settings.max_requests, daily_cap: settings.daily_cap, subject: f.subject.trim() || null, body: f.body.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const res = row
+      ? await supabase.from('automations').update(values).eq('client_id', client.id).select('client_id')
+      : await supabase.from('automations').insert({ ...values, client_id: client.id }).select('client_id');
+    if (res.error || !res.data || res.data.length === 0) { setMsg({ type: 'error', text: 'Could not save. Please try again.' }); return; }
+    setRow({ ...values, client_id: client.id });
+    setMsg({ type: 'ok', text: f.enabled ? 'Saved. Emails go out automatically from the next daily run (about 9 in the morning).' : 'Saved. Automatic emails are off.' });
+  }
+
+  const sel = { ...inputStyle, width: '100%' };
+  return (
+    <Card title="Automatic review emails"
+      subtitle="Cognix emails your customers a personal request for their feedback, and reminders if you choose, without you pressing send. For customers you typed in or imported who have an email address.">
+      <form onSubmit={save}>
+        <label style={{ display: 'flex', gap: '0.7rem', alignItems: 'flex-start', cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })}
+            aria-label="Send review emails automatically" style={{ marginTop: '0.25rem' }} />
+          <span><b>Send review emails automatically</b></span>
+        </label>
+        <label style={labelStyle}>First email</label>
+        <select style={sel} aria-label="First email" value={f.first_delay_days} onChange={set('first_delay_days', true)}>
+          <option value={0}>At the next daily run after they are added</option>
+          <option value={1}>1 day after they are added</option>
+          <option value={2}>2 days after they are added</option>
+          <option value={3}>3 days after they are added</option>
+          <option value={7}>7 days after they are added</option>
+        </select>
+        <label style={labelStyle}>Reminders (if they have not replied)</label>
+        <select style={sel} aria-label="Reminders" value={f.reminder_days} onChange={set('reminder_days')}>
+          <option value="">No reminders</option>
+          <option value="3">One reminder, 3 days after the first email</option>
+          <option value="3,7">Two reminders: 3 and 7 days after</option>
+          <option value="2,5,10">Three reminders: 2, 5 and 10 days after</option>
+        </select>
+        <label style={labelStyle}>Ask again later</label>
+        <select style={sel} aria-label="Ask again" value={f.repeat_days} onChange={set('repeat_days', true)}>
+          <option value={0}>Never ask again</option>
+          <option value={60}>Every 60 days</option>
+          <option value={90}>Every 90 days</option>
+          <option value={180}>Every 180 days</option>
+        </select>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 10rem' }}>
+            <label style={labelStyle}>Most emails per customer</label>
+            <select style={sel} aria-label="Most emails per customer" value={f.max_requests} onChange={set('max_requests', true)}>
+              {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: '1 1 10rem' }}>
+            <label style={labelStyle}>Most emails per day</label>
+            <select style={sel} aria-label="Most emails per day" value={f.daily_cap} onChange={set('daily_cap', true)}>
+              {[10, 20, 30, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+        <label style={labelStyle}>Subject</label>
+        <input style={inputStyle} aria-label="Email subject" value={f.subject} onChange={set('subject')} maxLength={200} placeholder={DEFAULT_SUBJECT} />
+        <label style={labelStyle}>Your message (use {'{first_name}'} and {'{business}'} to make it personal)</label>
+        <textarea style={{ ...inputStyle, minHeight: '7rem' }} aria-label="Email message" value={f.body} onChange={set('body')} maxLength={2000} placeholder={DEFAULT_BODY} />
+        <div style={{ background: c.bg, border: '1px solid ' + c.line, borderRadius: '0.6rem', padding: '0.8rem', marginTop: '0.9rem',
+                      color: c.muted, fontSize: '0.88rem', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+          <div style={{ color: c.text, fontWeight: 700, marginBottom: '0.3rem' }}>Preview</div>
+          {'Subject: ' + renderTemplate(f.subject.trim() || DEFAULT_SUBJECT, vars) + '\n\n' + renderTemplate(f.body.trim() || DEFAULT_BODY, vars)
+            + '\n\n[ Share your feedback ]  <- a big button'}
+        </div>
+        <p style={{ color: c.muted, fontSize: '0.82rem', lineHeight: 1.55, margin: '0.7rem 0 0 0' }}>
+          Every email has an unsubscribe link at the bottom. Anyone who unsubscribes is marked Don&apos;t contact and never emailed again.
+          Emails go out once a day. Customers who typed in their own email on the stand are not included.
+        </p>
+        <p style={{ margin: '0.7rem 0 0 0' }}>
+          {f.enabled ? <span><b>{ready}</b> customer{ready === 1 ? '' : 's'} ready for the next run.</span> : <span style={{ color: c.muted }}>Switched off.</span>}
+        </p>
+        <button type="submit" style={{ ...primaryBtn, marginTop: '0.8rem' }}>Save settings</button>
+        {msg && <p role="status" style={{ margin: '0.7rem 0 0 0', color: msg.type === 'ok' ? c.green : c.red }}>{msg.text}</p>}
+      </form>
+    </Card>
+  );
+}
+
+// Writes a personal reply to a Google review, ready to copy and post.
+function ReviewReplies({ client }) {
+  const [reviewer, setReviewer] = useState('');
+  const [stars, setStars] = useState(5);
+  const [text, setText] = useState('');
+  const [reply, setReply] = useState('');
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try { await navigator.clipboard.writeText(reply); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
+  }
+  return (
+    <div>
+      <Card title="Reply to a Google review"
+        subtitle="Paste a review and get a personal reply to read, change if you like, and post on Google.">
+        <label style={{ ...labelStyle, marginTop: 0 }}>Reviewer&apos;s name</label>
+        <input style={inputStyle} aria-label="Reviewer name" value={reviewer} onChange={(e) => setReviewer(e.target.value)} maxLength={80} />
+        <label style={labelStyle}>Stars</label>
+        <select style={inputStyle} aria-label="Review stars" value={stars} onChange={(e) => setStars(Number(e.target.value))}>
+          {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} star{n === 1 ? '' : 's'}</option>)}
+        </select>
+        <label style={labelStyle}>What they wrote</label>
+        <textarea style={{ ...inputStyle, minHeight: '6rem' }} aria-label="Review text" value={text} onChange={(e) => { setText(e.target.value); setReply(''); }} maxLength={4000} />
+        <button type="button" style={{ ...primaryBtn, marginTop: '1rem' }}
+          onClick={() => setReply(draftReply({ business: client.business_name, reviewer, stars, text }))}>
+          Write a reply
+        </button>
+        {reply && (
+          <div style={{ marginTop: '1.1rem' }}>
+            <label style={{ ...labelStyle, marginTop: 0 }}>Your reply (you can change it)</label>
+            <textarea style={{ ...inputStyle, minHeight: '8rem' }} aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} />
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.7rem' }}>
+              <button type="button" onClick={copy} style={ghostBtn}>{copied ? 'Copied' : 'Copy reply'}</button>
+              <a href="https://business.google.com/reviews" target="_blank" rel="noreferrer" style={ghostBtn}>Open your Google reviews</a>
+            </div>
+          </div>
+        )}
+        <p style={{ color: c.muted, fontSize: '0.8rem', lineHeight: 1.55, margin: '1rem 0 0 0' }}>
+          This is a draft that only mentions what the review says. Please read it before you post. Posting replies
+          automatically needs Google&apos;s approval for each business, so for now you paste it in yourself.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
 function ReviewQueue({ client, customers, onUpdated, onClose, onBehalf }) {
   const [asked, setAsked] = useState(null); // customer id -> when they were last asked
   const [channel, setChannel] = useState('whatsapp');
@@ -1286,6 +1460,8 @@ function CustomersTab({ client, customers, setCustomers, error, focusId, setFocu
         <AddCustomer client={client} customers={customers} onCancel={() => setMode('list')}
           onAdded={(row) => { setCustomers((list) => [row, ...list]); setMode('list'); setFocusId(row.id); }} />
       )}
+      <AutomationCard client={client} customers={customers} />
+
       {mode === 'queue' && (
         <ReviewQueue client={client} customers={customers} onBehalf={onBehalf} onClose={() => setMode('list')}
           onUpdated={(u) => setCustomers((list) => list.map((x) => (x.id === u.id ? { ...x, ...u } : x)))} />
@@ -1907,9 +2083,12 @@ function Dashboard({ client, clients, onSelect, onClientUpdated, userEmail, jump
         {tabBtn('customers', dueCount > 0 ? 'Customers (' + dueCount + ' to follow up)' : 'Customers')}
         {isService && tabBtn('overview', 'Overview')}
         {!isService && tabBtn('add', 'Add customers')}
+        {tabBtn('replies', 'Review replies')}
       </div>
 
-      {tab === 'add' ? (
+      {tab === 'replies' ? (
+        <ReviewReplies client={client} />
+      ) : tab === 'add' ? (
         <QuickAdd client={client} customers={customers || []} setCustomers={setCustomers}
           onOpen={(id) => { setFocusId(id); setTab('customers'); }} />
       ) : tab === 'overview' ? (
