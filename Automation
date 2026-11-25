@@ -1,0 +1,81 @@
+// Rules and wording for automatic review emails. Nothing in this file talks to the internet.
+export const DAY = 24 * 60 * 60 * 1000;
+export const DEFAULT_SUBJECT = 'How was your visit to {business}?';
+export const DEFAULT_BODY = "Hi {first_name},\n\nThank you for visiting {business}. We'd really like to hear your feedback on your visit - it only takes a few seconds.";
+
+// "3,7" -> [3, 7]: reminder days counted from the first email. At most four, 1 to 60 days.
+export function parseReminders(text) {
+  const out = String(text || '').split(',').map((x) => parseInt(x.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 1 && n <= 60);
+  return out.slice(0, 4).sort((a, b) => a - b);
+}
+
+export function firstName(full) {
+  const f = String(full || '').trim().split(/\s+/)[0];
+  return f || 'there';
+}
+
+export function renderTemplate(str, vars) {
+  return String(str || '').replace(/\{(first_name|business|link)\}/g, (_, k) => (vars[k] == null ? '' : String(vars[k])));
+}
+
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Only customers the business itself added (typed in or imported) get automatic emails. People who
+// typed their own address into a public form are left out, so nobody can have a stranger emailed.
+export function isAutoEligible(cu) {
+  if (!cu || !EMAIL.test(String(cu.email || '').trim())) return false;
+  if (cu.source !== 'manual' && cu.source !== 'import') return false;
+  if (cu.consent === 'opted_out' || cu.consent === 'follow_up_only') return false;
+  if (cu.status === 'complaint' || cu.status === 'lost' || cu.status === 'reviewed') return false;
+  return true;
+}
+
+// Who should be emailed on this run, oldest first, no more than the daily limit.
+//   requests = every review request already sent (by hand or automatically): { customer_id, created_at }
+export function dueCustomers({ customers, requests, settings, now }) {
+  const t = (now || new Date()).getTime();
+  const reminders = parseReminders(settings.reminder_days);
+  const sentBy = {};
+  (requests || []).forEach((r) => {
+    const when = new Date(r.created_at).getTime();
+    if (Number.isFinite(when)) (sentBy[r.customer_id] = sentBy[r.customer_id] || []).push(when);
+  });
+  const out = [];
+  (customers || []).forEach((cu) => {
+    if (!isAutoEligible(cu)) return;
+    const sent = (sentBy[cu.id] || []).slice().sort((a, b) => a - b);
+    const n = sent.length;
+    if (n >= settings.max_requests || !Number.isFinite(new Date(cu.created_at).getTime())) return;
+    let dueAt = null;
+    if (n === 0) dueAt = new Date(cu.created_at).getTime() + settings.first_delay_days * DAY;
+    else if (n <= reminders.length) dueAt = sent[0] + reminders[n - 1] * DAY;
+    else if (settings.repeat_days > 0) dueAt = sent[n - 1] + settings.repeat_days * DAY;
+    if (dueAt === null || dueAt > t) return;
+    if (n > 0 && t - sent[n - 1] < DAY) return; // never twice in one day
+    out.push({ customer: cu, step: n + 1, dueAt });
+  });
+  out.sort((a, b) => a.dueAt - b.dueAt);
+  return out.slice(0, Math.min(settings.daily_cap || 30, 100));
+}
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// The email itself: the business's own words, a big button, and a way to unsubscribe.
+export function buildEmail({ business, customer, link, unsubscribeUrl, subject, body }) {
+  const vars = { first_name: firstName(customer.full_name), business, link };
+  const subj = renderTemplate(subject || DEFAULT_SUBJECT, vars).replace(/[\r\n]+/g, ' ').slice(0, 200);
+  const text = renderTemplate(body || DEFAULT_BODY, vars);
+  const paras = text.split(/\n{2,}/).map((p) =>
+    '<p style="margin:0 0 16px 0;line-height:1.6;">' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+  const html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#12151a;">'
+    + '<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:28px;">' + paras
+    + '<p style="margin:24px 0;text-align:center;"><a href="' + esc(link) + '" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:14px 28px;border-radius:8px;">Share your feedback</a></p>'
+    + '<p style="margin:0;font-size:13px;color:#566070;text-align:center;">Or open this link: <a href="' + esc(link) + '" style="color:#0f766e;">' + esc(link) + '</a></p></div>'
+    + '<p style="max-width:520px;margin:16px auto 0 auto;font-size:12px;color:#8a93a0;text-align:center;">You are receiving this because you visited ' + esc(business)
+    + '. <a href="' + esc(unsubscribeUrl) + '" style="color:#8a93a0;">Unsubscribe</a></p></body></html>';
+  return {
+    subject: subj, html,
+    text: text + '\n\nTap the link below to share your feedback:\n' + link + '\n\nTo stop these emails: ' + unsubscribeUrl,
+  };
+}
